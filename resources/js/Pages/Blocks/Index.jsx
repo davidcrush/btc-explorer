@@ -108,15 +108,6 @@ export default function Index() {
                                                 Fees: {formatAmount(block.total_fees)}
                                             </Text>
                                             <Text fontSize="sm" color="gray.300">
-                                                Size: {block.size}
-                                            </Text>
-                                            <Text fontSize="sm" color="gray.300">
-                                                Weight: {block.weight}
-                                            </Text>
-                                            <Text fontSize="sm" color="gray.300">
-                                                Nonce: {block.nonce}
-                                            </Text>
-                                            <Text fontSize="sm" color="gray.300">
                                                 Time: {new Date(block.timestamp * 1000).toLocaleString()}
                                             </Text>
                                         </HStack>
