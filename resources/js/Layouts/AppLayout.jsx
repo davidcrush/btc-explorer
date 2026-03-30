@@ -39,24 +39,52 @@ export default function AppLayout({ title, subtitle, children }) {
             <Box borderBottomWidth="1px" borderColor={palette.panelBorder}>
                 <Container maxW="6xl" py={4}>
                     <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
-                        <HStack gap={2}>
+                        <Flex align="center" gap={{ base: 4, md: 8 }} flexWrap="wrap">
                             <Button
+                                variant="ghost"
                                 size="sm"
-                                variant={url === '/' ? 'solid' : 'ghost'}
-                                colorPalette="orange"
+                                h="auto"
+                                py={1}
+                                px={2}
                                 onClick={() => router.visit('/')}
+                                _hover={{ bg: isDark ? 'whiteAlpha.100' : 'blackAlpha.50' }}
                             >
-                                Home
+                                <Text
+                                    as="span"
+                                    fontFamily="mono"
+                                    fontSize="md"
+                                    fontWeight="semibold"
+                                    letterSpacing="tight"
+                                    color={palette.text}
+                                >
+                                    <Text as="span" color="orange.400">
+                                        btc
+                                    </Text>
+                                    <Text as="span" color={palette.subtext}>
+                                        -explorer
+                                    </Text>
+                                </Text>
                             </Button>
-                            <Button
-                                size="sm"
-                                variant={url.startsWith('/blocks') ? 'solid' : 'ghost'}
-                                colorPalette="orange"
-                                onClick={() => router.visit('/blocks')}
-                            >
-                                Blocks
-                            </Button>
-                        </HStack>
+
+                            <HStack gap={1} pl={{ base: 0, sm: 2 }} borderLeftWidth={{ base: 0, sm: '1px' }} borderColor={palette.panelBorder}>
+                                <Button
+                                    size="sm"
+                                    variant={url === '/' ? 'solid' : 'ghost'}
+                                    colorPalette="orange"
+                                    onClick={() => router.visit('/')}
+                                >
+                                    Home
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant={url.startsWith('/blocks') ? 'solid' : 'ghost'}
+                                    colorPalette="orange"
+                                    onClick={() => router.visit('/blocks')}
+                                >
+                                    Blocks
+                                </Button>
+                            </HStack>
+                        </Flex>
 
                         <HStack>
                             <Button
