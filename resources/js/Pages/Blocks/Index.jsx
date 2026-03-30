@@ -9,17 +9,31 @@ import {
     Spinner,
     Stack,
     Text,
+    TooltipContent,
+    TooltipPositioner,
+    TooltipRoot,
+    TooltipTrigger,
 } from '@chakra-ui/react';
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import AppLayout from '../../Layouts/AppLayout';
 import { useUserPreferences } from '../../contexts/UserPreferencesContext';
+import { formatBlockFullDateTime, formatBlockRelativeTime } from '../../utils/blockTimestamp';
 
 export default function Index() {
     const [blocks, setBlocks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
+    const [relativeTimeTick, setRelativeTimeTick] = useState(0);
     const { formatAmount } = useUserPreferences();
+
+    useEffect(() => {
+        const id = window.setInterval(() => {
+            setRelativeTimeTick((n) => n + 1);
+        }, 60_000);
+
+        return () => window.clearInterval(id);
+    }, []);
 
     const fetchBlocks = useCallback(async () => {
         setLoading(true);
@@ -107,9 +121,37 @@ export default function Index() {
                                             <Text fontSize="sm" color="gray.300">
                                                 Fees: {formatAmount(block.total_fees)}
                                             </Text>
-                                            <Text fontSize="sm" color="gray.300">
-                                                Time: {new Date(block.timestamp * 1000).toLocaleString()}
-                                            </Text>
+                                            <TooltipRoot openDelay={250} closeDelay={100}>
+                                                <TooltipTrigger asChild>
+                                                    <Text
+                                                        as="span"
+                                                        fontSize="sm"
+                                                        color="gray.300"
+                                                        cursor="help"
+                                                        borderBottomWidth="1px"
+                                                        borderBottomStyle="dotted"
+                                                        borderBottomColor="gray.500"
+                                                        display="inline"
+                                                    >
+                                                        Time:{' '}
+                                                        {formatBlockRelativeTime(
+                                                            block.timestamp,
+                                                            relativeTimeTick
+                                                        )}
+                                                    </Text>
+                                                </TooltipTrigger>
+                                                <TooltipPositioner>
+                                                    <TooltipContent
+                                                        px={3}
+                                                        py={2}
+                                                        maxW="sm"
+                                                        textStyle="sm"
+                                                        textAlign="center"
+                                                    >
+                                                        {formatBlockFullDateTime(block.timestamp)}
+                                                    </TooltipContent>
+                                                </TooltipPositioner>
+                                            </TooltipRoot>
                                         </HStack>
                                     </Stack>
                                 </Box>
