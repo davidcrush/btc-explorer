@@ -2,11 +2,19 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
 class BtcBlocksApiTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        Cache::store((string) config('services.blockstream.cache_store'))->flush();
+    }
+
     public function test_it_returns_latest_blocks_from_blockstream_with_default_limit_of_ten(): void
     {
         Http::fake([
@@ -78,6 +86,21 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonCount(25, 'data.blocks.0.transactions')
             ->assertJsonPath('data.blocks.0.transactions.0', 'txid-1')
             ->assertJsonPath('data.blocks.0.transactions.24', 'txid-25');
+    }
+
+    public function test_it_caches_blockstream_response_for_repeated_requests(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/blocks' => Http::response($this->fakeBlocks(1), 200),
+            'https://blockstream.info/api/block/*/txids' => Http::response($this->fakeTxids(3), 200),
+        ]);
+
+        $this->getJson('/api/v1/btc/blocks?limit=1')->assertOk();
+        $this->getJson('/api/v1/btc/blocks?limit=1')->assertOk();
+
+        // First request makes two upstream calls (/blocks + /block/:hash/txids).
+        // Second request is served from cache.
+        Http::assertSentCount(2);
     }
 
     /**
