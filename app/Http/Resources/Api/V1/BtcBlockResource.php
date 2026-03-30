@@ -14,6 +14,7 @@ class BtcBlockResource extends JsonResource
      *     hash: string,
      *     weight: int,
      *     height: int,
+     *     total_transactions: int,
      *     transactions: list<string>,
      *     timestamp: int,
      *     size: int,

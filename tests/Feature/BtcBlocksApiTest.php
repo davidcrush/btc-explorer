@@ -28,6 +28,7 @@ class BtcBlocksApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(10, 'data.blocks')
             ->assertJsonPath('data.blocks.0.hash', 'block-hash-1')
+            ->assertJsonPath('data.blocks.0.total_transactions', 3001)
             ->assertJsonPath('data.blocks.0.transactions.0', 'txid-a')
             ->assertJsonStructure([
                 'data' => [
@@ -36,6 +37,7 @@ class BtcBlocksApiTest extends TestCase
                             'hash',
                             'weight',
                             'height',
+                            'total_transactions',
                             'transactions',
                             'timestamp',
                             'size',
@@ -115,6 +117,7 @@ class BtcBlocksApiTest extends TestCase
                 'id' => "block-hash-{$i}",
                 'weight' => 3_990_000 + $i,
                 'height' => 900_000 - $i,
+                'tx_count' => 3_000 + $i,
                 'timestamp' => 1_700_000_000 + $i,
                 'size' => 1_500_000 + $i,
                 'difficulty' => '89762456972366.31255187',

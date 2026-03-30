@@ -80,8 +80,8 @@ export default function Index() {
                                     <Stack gap={3}>
                                         <HStack>
                                             <Badge colorPalette="orange">Height {block.height}</Badge>
-                                            <Badge colorPalette="purple">
-                                                Tx: {block.transactions.length}
+                                            <Badge colorPalette="blue">
+                                                Total tx: {block.total_transactions}
                                             </Badge>
                                         </HStack>
 

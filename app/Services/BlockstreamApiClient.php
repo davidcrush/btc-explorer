@@ -36,6 +36,7 @@ class BlockstreamApiClient
      *     hash: string,
      *     weight: int,
      *     height: int,
+     *     total_transactions: int,
      *     transactions: list<string>,
      *     timestamp: int,
      *     size: int,
@@ -73,6 +74,7 @@ class BlockstreamApiClient
                 'hash' => (string) $block['id'],
                 'weight' => (int) ($block['weight'] ?? 0),
                 'height' => (int) ($block['height'] ?? 0),
+                'total_transactions' => (int) ($block['tx_count'] ?? 0),
                 'transactions' => $this->fetchTransactionIds((string) $block['id']),
                 'timestamp' => (int) ($block['timestamp'] ?? 0),
                 'size' => (int) ($block['size'] ?? 0),
@@ -112,6 +114,7 @@ class BlockstreamApiClient
                 hash: (string) ($block['hash'] ?? ''),
                 weight: (int) ($block['weight'] ?? 0),
                 height: (int) ($block['height'] ?? 0),
+                totalTransactions: (int) ($block['total_transactions'] ?? count($transactions)),
                 transactions: array_values(array_filter($transactions, static fn (mixed $txid): bool => is_string($txid))),
                 timestamp: (int) ($block['timestamp'] ?? 0),
                 size: (int) ($block['size'] ?? 0),
@@ -173,6 +176,6 @@ class BlockstreamApiClient
 
     private function latestBlocksCacheKey(int $limit): string
     {
-        return "btc:blockstream:v2:latest-blocks:limit:{$limit}";
+        return "btc:blockstream:v3:latest-blocks:limit:{$limit}";
     }
 }
