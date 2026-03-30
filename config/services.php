@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'blockstream' => [
+        'base_url' => env('BLOCKSTREAM_API_BASE_URL', 'https://blockstream.info/api'),
+        'timeout' => (int) env('BLOCKSTREAM_API_TIMEOUT', 10),
+    ],
+
 ];
