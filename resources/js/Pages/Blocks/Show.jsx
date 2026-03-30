@@ -21,6 +21,8 @@ export default function Show({ hash }) {
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
 
+    const formatSats = (value) => `${Number(value || 0).toLocaleString()} sats`;
+
     const fetchBlock = useCallback(async (start = 0, append = false) => {
         if (append) {
             setLoadingMore(true);
@@ -161,14 +163,62 @@ export default function Show({ hash }) {
                                 </Text>
                                 <Stack gap={2}>
                                     {transactions.map((txid) => (
-                                        <Code
-                                            key={txid}
-                                            whiteSpace="normal"
-                                            wordBreak="break-all"
-                                            colorPalette="gray"
+                                        <Box
+                                            key={txid.txid}
+                                            borderWidth="1px"
+                                            borderColor="gray.700"
+                                            rounded="md"
+                                            p={3}
+                                            bg="gray.950"
                                         >
-                                            {txid}
-                                        </Code>
+                                            <HStack mb={2} wrap="wrap">
+                                                {txid.is_coinbase && (
+                                                    <Badge colorPalette="orange">Coinbase</Badge>
+                                                )}
+                                                <Code colorPalette="gray" whiteSpace="normal" wordBreak="break-all">
+                                                    {txid.txid}
+                                                </Code>
+                                            </HStack>
+                                            <HStack wrap="wrap" gap={4} mb={2}>
+                                                <Text fontSize="sm" color="gray.300">
+                                                    Inputs total: {formatSats(txid.input_total)}
+                                                </Text>
+                                                <Text fontSize="sm" color="gray.300">
+                                                    Outputs total: {formatSats(txid.output_total)}
+                                                </Text>
+                                                <Text fontSize="sm" color="gray.300">
+                                                    Fee: {formatSats(txid.fee)}
+                                                </Text>
+                                            </HStack>
+                                            <Text fontSize="sm" color="gray.200" mb={1}>
+                                                Inputs
+                                            </Text>
+                                            <Stack gap={1} mb={2}>
+                                                {txid.inputs.map((input, index) => (
+                                                    <Text key={`${txid.txid}-in-${index}`} fontSize="xs" color="gray.400">
+                                                        {input.is_coinbase
+                                                            ? 'Coinbase input'
+                                                            : `${input.address ?? 'Unknown address'} - ${formatSats(input.value)}`}
+                                                    </Text>
+                                                ))}
+                                                {txid.inputs.length === 0 && (
+                                                    <Text fontSize="xs" color="gray.500">No inputs</Text>
+                                                )}
+                                            </Stack>
+                                            <Text fontSize="sm" color="gray.200" mb={1}>
+                                                Outputs
+                                            </Text>
+                                            <Stack gap={1}>
+                                                {txid.outputs.map((output, index) => (
+                                                    <Text key={`${txid.txid}-out-${index}`} fontSize="xs" color="gray.400">
+                                                        {(output.address ?? 'Unknown address')} - {formatSats(output.value)}
+                                                    </Text>
+                                                ))}
+                                                {txid.outputs.length === 0 && (
+                                                    <Text fontSize="xs" color="gray.500">No outputs</Text>
+                                                )}
+                                            </Stack>
+                                        </Box>
                                     ))}
                                     {transactions.length === 0 && (
                                         <Text color="gray.400">No transactions available.</Text>

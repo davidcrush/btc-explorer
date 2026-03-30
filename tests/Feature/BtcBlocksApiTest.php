@@ -124,6 +124,8 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonPath('data.block.previous_block_hash', 'prev-hash')
             ->assertJsonPath('data.block.next_block_hash', 'next-hash')
             ->assertJsonPath('data.block.total_transactions', 3200)
+            ->assertJsonPath('data.block.transactions.0.is_coinbase', true)
+            ->assertJsonPath('data.block.transactions.0.output_total', 5000000000)
             ->assertJsonPath('data.block.has_more_transactions', true)
             ->assertJsonPath('data.block.next_transactions_start', 25)
             ->assertJsonCount(25, 'data.block.transactions');
@@ -145,7 +147,7 @@ class BtcBlocksApiTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.block.transactions_start', 25)
-            ->assertJsonPath('data.block.transactions.0', 'txid-26')
+            ->assertJsonPath('data.block.transactions.0.txid', 'txid-26')
             ->assertJsonPath('data.block.has_more_transactions', true)
             ->assertJsonPath('data.block.next_transactions_start', 50);
     }
@@ -205,15 +207,56 @@ class BtcBlocksApiTest extends TestCase
     }
 
     /**
-     * @return list<array{txid: string}>
+     * @return list<array{
+     *     txid: string,
+     *     fee: int,
+     *     vin: list<array<string, mixed>>,
+     *     vout: list<array<string, mixed>>
+     * }>
      */
     private function fakeTransactions(int $count, int $start = 1): array
     {
         $transactions = [];
 
         for ($i = $start; $i < ($start + $count); $i++) {
+            $isCoinbase = $i === 1;
             $transactions[] = [
                 'txid' => "txid-{$i}",
+                'fee' => $isCoinbase ? 0 : 2100,
+                'vin' => $isCoinbase
+                    ? [
+                        [
+                            'is_coinbase' => true,
+                        ],
+                    ]
+                    : [
+                        [
+                            'is_coinbase' => false,
+                            'txid' => "input-tx-{$i}",
+                            'vout' => 0,
+                            'prevout' => [
+                                'value' => 1500,
+                                'scriptpubkey_address' => "in-address-{$i}",
+                            ],
+                        ],
+                    ],
+                'vout' => $isCoinbase
+                    ? [
+                        [
+                            'value' => 5000000000,
+                            'scriptpubkey_address' => "coinbase-address-{$i}",
+                        ],
+                    ]
+                    : [
+                        [
+                            'value' => 900,
+                            'scriptpubkey_address' => "out-a-{$i}",
+                        ],
+                        [
+                            'value' => 500,
+                            'scriptpubkey_address' => "out-b-{$i}",
+                        ],
+                    ],
             ];
         }
 

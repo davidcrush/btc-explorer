@@ -29,7 +29,15 @@ class BtcBlockDetailResource extends JsonResource
      *     transactions_limit: int,
      *     has_more_transactions: bool,
      *     next_transactions_start: ?int,
-     *     transactions: list<string>
+     *     transactions: list<array{
+     *         txid: string,
+     *         is_coinbase: bool,
+     *         fee: int,
+     *         input_total: int,
+     *         output_total: int,
+     *         inputs: list<array{txid: ?string, vout: ?int, address: ?string, value: int, is_coinbase: bool}>,
+     *         outputs: list<array{address: ?string, value: int}>
+     *     }>
      * }
      */
     public function toArray(Request $request): array

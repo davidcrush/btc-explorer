@@ -28,7 +28,30 @@ class BtcBlockDetailDataTest extends TestCase
             transactionsLimit: 25,
             hasMoreTransactions: true,
             nextTransactionsStart: 25,
-            transactions: ['txid-1', 'txid-2'],
+            transactions: [
+                [
+                    'txid' => 'txid-1',
+                    'is_coinbase' => true,
+                    'fee' => 0,
+                    'input_total' => 0,
+                    'output_total' => 5000000000,
+                    'inputs' => [
+                        [
+                            'txid' => null,
+                            'vout' => null,
+                            'address' => null,
+                            'value' => 0,
+                            'is_coinbase' => true,
+                        ],
+                    ],
+                    'outputs' => [
+                        [
+                            'address' => 'coinbase-address',
+                            'value' => 5000000000,
+                        ],
+                    ],
+                ],
+            ],
         );
 
         $this->assertSame([
@@ -50,7 +73,30 @@ class BtcBlockDetailDataTest extends TestCase
             'transactions_limit' => 25,
             'has_more_transactions' => true,
             'next_transactions_start' => 25,
-            'transactions' => ['txid-1', 'txid-2'],
+            'transactions' => [
+                [
+                    'txid' => 'txid-1',
+                    'is_coinbase' => true,
+                    'fee' => 0,
+                    'input_total' => 0,
+                    'output_total' => 5000000000,
+                    'inputs' => [
+                        [
+                            'txid' => null,
+                            'vout' => null,
+                            'address' => null,
+                            'value' => 0,
+                            'is_coinbase' => true,
+                        ],
+                    ],
+                    'outputs' => [
+                        [
+                            'address' => 'coinbase-address',
+                            'value' => 5000000000,
+                        ],
+                    ],
+                ],
+            ],
         ], $block->toArray());
     }
 }

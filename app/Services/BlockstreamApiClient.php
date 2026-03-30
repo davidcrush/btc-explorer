@@ -102,7 +102,7 @@ class BlockstreamApiClient
             transactionsLimit: (int) ($payload['transactions_limit'] ?? self::TRANSACTION_PAGE_SIZE),
             hasMoreTransactions: (bool) ($payload['has_more_transactions'] ?? false),
             nextTransactionsStart: isset($payload['next_transactions_start']) ? (int) $payload['next_transactions_start'] : null,
-            transactions: array_values(array_filter($transactions, static fn (mixed $txid): bool => is_string($txid))),
+            transactions: array_values(array_filter($transactions, static fn (mixed $tx): bool => is_array($tx))),
         );
     }
 
@@ -182,7 +182,15 @@ class BlockstreamApiClient
      *     transactions_limit: int,
      *     has_more_transactions: bool,
      *     next_transactions_start: ?int,
-     *     transactions: list<string>
+     *     transactions: list<array{
+     *         txid: string,
+     *         is_coinbase: bool,
+     *         fee: int,
+     *         input_total: int,
+     *         output_total: int,
+     *         inputs: list<array{txid: ?string, vout: ?int, address: ?string, value: int, is_coinbase: bool}>,
+     *         outputs: list<array{address: ?string, value: int}>
+     *     }>
      * }|null
      */
     private function fetchBlockDetailsPayload(string $hash, int $transactionsStart, int $transactionsLimit): ?array
@@ -207,7 +215,7 @@ class BlockstreamApiClient
         }
 
         $height = (int) ($block['height'] ?? 0);
-        $transactions = $this->fetchTransactionIdsPage((string) ($block['id'] ?? ''), $transactionsStart, $transactionsLimit);
+        $transactions = $this->fetchTransactionOverviewsPage((string) ($block['id'] ?? ''), $transactionsStart, $transactionsLimit);
         $totalTransactions = (int) ($block['tx_count'] ?? 0);
         $nextTransactionsStart = ($transactionsStart + count($transactions)) < $totalTransactions
             ? ($transactionsStart + count($transactions))
@@ -281,6 +289,34 @@ class BlockstreamApiClient
      */
     private function fetchTransactionIdsPage(string $blockHash, int $transactionsStart, int $transactionsLimit): array
     {
+        $transactions = $this->fetchTransactionOverviewsPage($blockHash, $transactionsStart, $transactionsLimit);
+
+        $txids = [];
+
+        foreach ($transactions as $transaction) {
+            $txid = $transaction['txid'] ?? null;
+
+            if (is_string($txid) && $txid !== '') {
+                $txids[] = $txid;
+            }
+        }
+
+        return $txids;
+    }
+
+    /**
+     * @return list<array{
+     *     txid: string,
+     *     is_coinbase: bool,
+     *     fee: int,
+     *     input_total: int,
+     *     output_total: int,
+     *     inputs: list<array{txid: ?string, vout: ?int, address: ?string, value: int, is_coinbase: bool}>,
+     *     outputs: list<array{address: ?string, value: int}>
+     * }>
+     */
+    private function fetchTransactionOverviewsPage(string $blockHash, int $transactionsStart, int $transactionsLimit): array
+    {
         if ($blockHash === '') {
             return [];
         }
@@ -306,7 +342,8 @@ class BlockstreamApiClient
             return [];
         }
 
-        $txids = [];
+        $txs = [];
+        $order = 0;
 
         foreach ($transactions as $transaction) {
             if (! is_array($transaction)) {
@@ -315,12 +352,53 @@ class BlockstreamApiClient
 
             $txid = $transaction['txid'] ?? null;
 
-            if (is_string($txid) && $txid !== '') {
-                $txids[] = $txid;
+            if (! is_string($txid) || $txid === '') {
+                continue;
             }
+
+            $inputs = $this->mapInputs($transaction['vin'] ?? []);
+            $outputs = $this->mapOutputs($transaction['vout'] ?? []);
+            $isCoinbase = $this->isCoinbaseTx($inputs);
+
+            $inputTotal = 0;
+            foreach ($inputs as $input) {
+                $inputTotal += $input['value'];
+            }
+
+            $outputTotal = 0;
+            foreach ($outputs as $output) {
+                $outputTotal += $output['value'];
+            }
+
+            $txs[] = [
+                'txid' => $txid,
+                'is_coinbase' => $isCoinbase,
+                'fee' => (int) ($transaction['fee'] ?? 0),
+                'input_total' => $isCoinbase ? 0 : $inputTotal,
+                'output_total' => $outputTotal,
+                'inputs' => $inputs,
+                'outputs' => $outputs,
+                '_order' => $order,
+            ];
+            $order++;
         }
 
-        return array_slice($txids, 0, $limit);
+        usort($txs, static function (array $a, array $b): int {
+            if ($a['is_coinbase'] === $b['is_coinbase']) {
+                return $a['_order'] <=> $b['_order'];
+            }
+
+            return $a['is_coinbase'] ? -1 : 1;
+        });
+
+        $sliced = array_slice($txs, 0, $limit);
+
+        foreach ($sliced as &$tx) {
+            unset($tx['_order']);
+        }
+        unset($tx);
+
+        return $sliced;
     }
 
     private function baseUrl(): string
@@ -416,5 +494,86 @@ class BlockstreamApiClient
         }
 
         return min($transactionsLimit, self::TRANSACTION_PAGE_SIZE);
+    }
+
+    /**
+     * @param  mixed  $vin
+     * @return list<array{txid: ?string, vout: ?int, address: ?string, value: int, is_coinbase: bool}>
+     */
+    private function mapInputs(mixed $vin): array
+    {
+        if (! is_array($vin)) {
+            return [];
+        }
+
+        $inputs = [];
+
+        foreach ($vin as $input) {
+            if (! is_array($input)) {
+                continue;
+            }
+
+            $prevout = $input['prevout'] ?? null;
+            $address = null;
+            $value = 0;
+
+            if (is_array($prevout)) {
+                $addressValue = $prevout['scriptpubkey_address'] ?? null;
+                $address = is_string($addressValue) && $addressValue !== '' ? $addressValue : null;
+                $value = (int) ($prevout['value'] ?? 0);
+            }
+
+            $inputs[] = [
+                'txid' => is_string($input['txid'] ?? null) ? $input['txid'] : null,
+                'vout' => isset($input['vout']) ? (int) $input['vout'] : null,
+                'address' => $address,
+                'value' => $value,
+                'is_coinbase' => (bool) ($input['is_coinbase'] ?? false),
+            ];
+        }
+
+        return $inputs;
+    }
+
+    /**
+     * @param  mixed  $vout
+     * @return list<array{address: ?string, value: int}>
+     */
+    private function mapOutputs(mixed $vout): array
+    {
+        if (! is_array($vout)) {
+            return [];
+        }
+
+        $outputs = [];
+
+        foreach ($vout as $output) {
+            if (! is_array($output)) {
+                continue;
+            }
+
+            $addressValue = $output['scriptpubkey_address'] ?? null;
+
+            $outputs[] = [
+                'address' => is_string($addressValue) && $addressValue !== '' ? $addressValue : null,
+                'value' => (int) ($output['value'] ?? 0),
+            ];
+        }
+
+        return $outputs;
+    }
+
+    /**
+     * @param  list<array{is_coinbase: bool}>  $inputs
+     */
+    private function isCoinbaseTx(array $inputs): bool
+    {
+        foreach ($inputs as $input) {
+            if (($input['is_coinbase'] ?? false) === true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
