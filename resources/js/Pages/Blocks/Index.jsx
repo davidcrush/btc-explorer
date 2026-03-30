@@ -6,7 +6,7 @@ import {
     Code,
     Flex,
     HStack,
-    Spinner,
+    Skeleton,
     Stack,
     Text,
     TooltipContent,
@@ -19,6 +19,28 @@ import axios from 'axios';
 import AppLayout from '../../Layouts/AppLayout';
 import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { formatBlockFullDateTime, formatBlockRelativeTime } from '../../utils/blockTimestamp';
+
+const BLOCK_LIST_LIMIT = 10;
+
+function BlockCardSkeleton() {
+    return (
+        <Box borderWidth="1px" borderColor="gray.700" rounded="lg" p={4} bg="gray.900">
+            <Stack gap={3}>
+                <HStack gap={2}>
+                    <Skeleton height="6" width="24" loading />
+                    <Skeleton height="6" width="32" loading />
+                </HStack>
+                <Skeleton height="12" width="full" loading />
+                <HStack wrap="wrap" gap={4}>
+                    <Skeleton height="4" width="44" loading />
+                    <Skeleton height="4" width="36" loading />
+                    <Skeleton height="4" width="32" loading />
+                    <Skeleton height="4" width="40" loading />
+                </HStack>
+            </Stack>
+        </Box>
+    );
+}
 
 export default function Index() {
     const [blocks, setBlocks] = useState([]);
@@ -40,7 +62,9 @@ export default function Index() {
         setError(null);
 
         try {
-            const response = await axios.get('/api/v1/btc/blocks?limit=10');
+            const response = await axios.get(
+                `/api/v1/btc/blocks?limit=${BLOCK_LIST_LIMIT}`
+            );
             setBlocks(response?.data?.data?.blocks ?? []);
         } catch {
             setError('Unable to load blocks right now.');
@@ -70,10 +94,11 @@ export default function Index() {
                     </Flex>
 
                     {loading && (
-                        <HStack>
-                            <Spinner size="sm" color="orange.300" />
-                            <Text color="gray.300">Loading blocks...</Text>
-                        </HStack>
+                        <Stack gap={4}>
+                            {Array.from({ length: BLOCK_LIST_LIMIT }, (_, index) => (
+                                <BlockCardSkeleton key={`block-skeleton-${index}`} />
+                            ))}
+                        </Stack>
                     )}
 
                     {!loading && error && (
