@@ -40,6 +40,15 @@ export default function AppLayout({ title, subtitle, children }) {
             subtext: isDark ? 'gray.400' : 'gray.600',
             panel: isDark ? 'gray.900' : 'white',
             panelBorder: isDark ? 'gray.700' : 'gray.200',
+            headerOutline: isDark
+                ? {
+                      borderColor: 'gray.500',
+                      color: 'gray.50',
+                      bg: 'whiteAlpha.200',
+                      _hover: { bg: 'whiteAlpha.300' },
+                      _expanded: { bg: 'whiteAlpha.300' },
+                  }
+                : {},
         }),
         [isDark]
     );
@@ -100,6 +109,7 @@ export default function AppLayout({ title, subtitle, children }) {
                             <Button
                                 size="sm"
                                 variant="outline"
+                                {...palette.headerOutline}
                                 onClick={() => setColorMode(isDark ? 'light' : 'dark')}
                             >
                                 {isDark ? 'Light mode' : 'Dark mode'}
@@ -111,6 +121,7 @@ export default function AppLayout({ title, subtitle, children }) {
                                     size="sm"
                                     variant="outline"
                                     rounded="full"
+                                    {...palette.headerOutline}
                                     onClick={() => setShowProfile((open) => !open)}
                                 >
                                     <Icon
