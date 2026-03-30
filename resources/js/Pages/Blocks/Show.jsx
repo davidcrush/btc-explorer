@@ -20,8 +20,45 @@ export default function Show({ hash }) {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
+    const [amountUnit, setAmountUnit] = useState('bitcoin');
 
-    const formatSats = (value) => `${Number(value || 0).toLocaleString()} sats`;
+    useEffect(() => {
+        const storedUnit = window.localStorage.getItem('amount-unit');
+        if (storedUnit === 'bitcoin' || storedUnit === 'millibit' || storedUnit === 'bit' || storedUnit === 'satoshi') {
+            setAmountUnit(storedUnit);
+        }
+    }, []);
+
+    useEffect(() => {
+        window.localStorage.setItem('amount-unit', amountUnit);
+    }, [amountUnit]);
+
+    const formatAmount = (value) => {
+        const sats = Number(value || 0);
+
+        if (amountUnit === 'bitcoin') {
+            return `${new Intl.NumberFormat(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 8,
+            }).format(sats / 100000000)} btc`;
+        }
+
+        if (amountUnit === 'millibit') {
+            return `${new Intl.NumberFormat(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 5,
+            }).format(sats / 100000)} mBTC`;
+        }
+
+        if (amountUnit === 'bit') {
+            return `${new Intl.NumberFormat(undefined, {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 2,
+            }).format(sats / 100)} μBTC`;
+        }
+
+        return `${new Intl.NumberFormat().format(sats)} sat`;
+    };
 
     const fetchBlock = useCallback(async (start = 0, append = false) => {
         if (append) {
@@ -76,6 +113,43 @@ export default function Show({ hash }) {
                             </Button>
                             <Button colorPalette="orange" onClick={() => fetchBlock(0, false)}>
                                 Refresh
+                            </Button>
+                        </HStack>
+                        <HStack>
+                            <Text fontSize="sm" color="gray.300">
+                                Amount unit:
+                            </Text>
+                            <Button
+                                size="sm"
+                                variant={amountUnit === 'bitcoin' ? 'solid' : 'outline'}
+                                colorPalette="orange"
+                                onClick={() => setAmountUnit('bitcoin')}
+                            >
+                                btc
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={amountUnit === 'millibit' ? 'solid' : 'outline'}
+                                colorPalette="orange"
+                                onClick={() => setAmountUnit('millibit')}
+                            >
+                                mBTC
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={amountUnit === 'bit' ? 'solid' : 'outline'}
+                                colorPalette="orange"
+                                onClick={() => setAmountUnit('bit')}
+                            >
+                                μBTC
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={amountUnit === 'satoshi' ? 'solid' : 'outline'}
+                                colorPalette="orange"
+                                onClick={() => setAmountUnit('satoshi')}
+                            >
+                                sat
                             </Button>
                         </HStack>
                     </Flex>
@@ -181,13 +255,13 @@ export default function Show({ hash }) {
                                             </HStack>
                                             <HStack wrap="wrap" gap={4} mb={2}>
                                                 <Text fontSize="sm" color="gray.300">
-                                                    Inputs total: {formatSats(txid.input_total)}
+                                                    Inputs total: {formatAmount(txid.input_total)}
                                                 </Text>
                                                 <Text fontSize="sm" color="gray.300">
-                                                    Outputs total: {formatSats(txid.output_total)}
+                                                    Outputs total: {formatAmount(txid.output_total)}
                                                 </Text>
                                                 <Text fontSize="sm" color="gray.300">
-                                                    Fee: {formatSats(txid.fee)}
+                                                    Fee: {formatAmount(txid.fee)}
                                                 </Text>
                                             </HStack>
                                             <Text fontSize="sm" color="gray.200" mb={1}>
@@ -198,7 +272,7 @@ export default function Show({ hash }) {
                                                     <Text key={`${txid.txid}-in-${index}`} fontSize="xs" color="gray.400">
                                                         {input.is_coinbase
                                                             ? 'Coinbase input'
-                                                            : `${input.address ?? 'Unknown address'} - ${formatSats(input.value)}`}
+                                                            : `${input.address ?? 'Unknown address'} - ${formatAmount(input.value)}`}
                                                     </Text>
                                                 ))}
                                                 {txid.inputs.length === 0 && (
@@ -211,7 +285,7 @@ export default function Show({ hash }) {
                                             <Stack gap={1}>
                                                 {txid.outputs.map((output, index) => (
                                                     <Text key={`${txid.txid}-out-${index}`} fontSize="xs" color="gray.400">
-                                                        {(output.address ?? 'Unknown address')} - {formatSats(output.value)}
+                                                        {(output.address ?? 'Unknown address')} - {formatAmount(output.value)}
                                                     </Text>
                                                 ))}
                                                 {txid.outputs.length === 0 && (
