@@ -1,5 +1,15 @@
 import { usePage, router } from '@inertiajs/react';
-import { Box, Button, Container, Flex, Heading, HStack, Text } from '@chakra-ui/react';
+import {
+    Box,
+    Button,
+    Container,
+    Flex,
+    Heading,
+    HStack,
+    Icon,
+    IconButton,
+    Text,
+} from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
 import { useUserPreferences } from '../contexts/UserPreferencesContext';
 
@@ -95,13 +105,25 @@ export default function AppLayout({ title, subtitle, children }) {
                                 {isDark ? 'Light mode' : 'Dark mode'}
                             </Button>
                             <Box position="relative">
-                                <Button
+                                <IconButton
+                                    aria-label="Profile and preferences"
+                                    aria-expanded={showProfile}
                                     size="sm"
                                     variant="outline"
+                                    rounded="full"
                                     onClick={() => setShowProfile((open) => !open)}
                                 >
-                                    Profile
-                                </Button>
+                                    <Icon
+                                        asChild={false}
+                                        viewBox="0 0 24 24"
+                                        boxSize="1.15em"
+                                    >
+                                        <path
+                                            fill="currentColor"
+                                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"
+                                        />
+                                    </Icon>
+                                </IconButton>
                                 {showProfile && (
                                     <Box
                                         position="absolute"
