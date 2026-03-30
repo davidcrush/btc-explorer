@@ -4,9 +4,7 @@ import {
     Box,
     Button,
     Code,
-    Container,
     Flex,
-    Heading,
     HStack,
     Spinner,
     Stack,
@@ -14,6 +12,7 @@ import {
 } from '@chakra-ui/react';
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
+import AppLayout from '../../Layouts/AppLayout';
 
 export default function Index() {
     const [blocks, setBlocks] = useState([]);
@@ -43,88 +42,82 @@ export default function Index() {
         <>
             <Head title="Latest Blocks" />
 
-            <Box minH="100vh" bg="gray.950" color="gray.100" py={10}>
-                <Container maxW="6xl">
-                    <Stack gap={6}>
-                        <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
-                            <Box>
-                                <Heading size="lg">Bitcoin Latest Blocks</Heading>
-                                <Text color="gray.400" mt={1}>
-                                    Inertia + React + Chakra UI starter page
-                                </Text>
-                            </Box>
-                            <Button onClick={fetchBlocks} colorPalette="orange" variant="solid">
-                                Refresh
-                            </Button>
-                        </Flex>
+            <AppLayout
+                title="Bitcoin Latest Blocks"
+                subtitle="Fetched from Blockstream and cached via Redis"
+            >
+                <Stack gap={6}>
+                    <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
+                        <Button onClick={fetchBlocks} colorPalette="orange" variant="solid">
+                            Refresh
+                        </Button>
+                    </Flex>
 
-                        {loading && (
-                            <HStack>
-                                <Spinner size="sm" color="orange.300" />
-                                <Text color="gray.300">Loading blocks...</Text>
-                            </HStack>
-                        )}
+                    {loading && (
+                        <HStack>
+                            <Spinner size="sm" color="orange.300" />
+                            <Text color="gray.300">Loading blocks...</Text>
+                        </HStack>
+                    )}
 
-                        {!loading && error && (
-                            <Box borderWidth="1px" borderColor="red.400" rounded="md" p={4}>
-                                <Text color="red.200">{error}</Text>
-                            </Box>
-                        )}
+                    {!loading && error && (
+                        <Box borderWidth="1px" borderColor="red.400" rounded="md" p={4}>
+                            <Text color="red.200">{error}</Text>
+                        </Box>
+                    )}
 
-                        {!loading && !error && (
-                            <Stack gap={4}>
-                                {blocks.map((block) => (
-                                    <Box
-                                        key={block.hash}
-                                        borderWidth="1px"
-                                        borderColor="gray.700"
-                                        rounded="lg"
-                                        p={4}
-                                        bg="gray.900"
-                                    >
-                                        <Stack gap={3}>
-                                            <HStack>
-                                                <Badge colorPalette="orange">Height {block.height}</Badge>
-                                                <Badge colorPalette="purple">
-                                                    Tx: {block.transactions.length}
-                                                </Badge>
-                                            </HStack>
+                    {!loading && !error && (
+                        <Stack gap={4}>
+                            {blocks.map((block) => (
+                                <Box
+                                    key={block.hash}
+                                    borderWidth="1px"
+                                    borderColor="gray.700"
+                                    rounded="lg"
+                                    p={4}
+                                    bg="gray.900"
+                                >
+                                    <Stack gap={3}>
+                                        <HStack>
+                                            <Badge colorPalette="orange">Height {block.height}</Badge>
+                                            <Badge colorPalette="purple">
+                                                Tx: {block.transactions.length}
+                                            </Badge>
+                                        </HStack>
 
-                                            <Code
-                                                whiteSpace="normal"
-                                                wordBreak="break-all"
-                                                colorPalette="gray"
-                                            >
-                                                {block.hash}
-                                            </Code>
+                                        <Code
+                                            whiteSpace="normal"
+                                            wordBreak="break-all"
+                                            colorPalette="gray"
+                                        >
+                                            {block.hash}
+                                        </Code>
 
-                                            <HStack wrap="wrap" gap={4}>
-                                                <Text fontSize="sm" color="gray.300">
-                                                    Size: {block.size}
-                                                </Text>
-                                                <Text fontSize="sm" color="gray.300">
-                                                    Weight: {block.weight}
-                                                </Text>
-                                                <Text fontSize="sm" color="gray.300">
-                                                    Nonce: {block.nonce}
-                                                </Text>
-                                                <Text fontSize="sm" color="gray.300">
-                                                    Time:{' '}
-                                                    {new Date(block.timestamp * 1000).toLocaleString()}
-                                                </Text>
-                                            </HStack>
-                                        </Stack>
-                                    </Box>
-                                ))}
+                                        <HStack wrap="wrap" gap={4}>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Size: {block.size}
+                                            </Text>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Weight: {block.weight}
+                                            </Text>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Nonce: {block.nonce}
+                                            </Text>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Time: {new Date(block.timestamp * 1000).toLocaleString()}
+                                            </Text>
+                                        </HStack>
+                                    </Stack>
+                                </Box>
+                            ))}
 
-                                {blocks.length === 0 && (
-                                    <Text color="gray.400">No blocks available.</Text>
-                                )}
-                            </Stack>
-                        )}
-                    </Stack>
-                </Container>
-            </Box>
+                            {blocks.length === 0 && (
+                                <Text color="gray.400">No blocks available.</Text>
+                            )}
+                        </Stack>
+                    )}
+                </Stack>
+            </AppLayout>
         </>
     );
 }
