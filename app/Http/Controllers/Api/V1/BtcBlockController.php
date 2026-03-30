@@ -8,6 +8,7 @@ use App\Http\Resources\Api\V1\BtcBlockDetailResource;
 use App\Http\Resources\Api\V1\BtcBlockResource;
 use App\Services\BlockstreamApiClient;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use RuntimeException;
 
 class BtcBlockController extends Controller
@@ -33,10 +34,18 @@ class BtcBlockController extends Controller
         ]);
     }
 
-    public function show(string $hash): JsonResponse
+    public function show(Request $request, string $hash): JsonResponse
     {
+        $validated = $request->validate([
+            'transactions_start' => ['sometimes', 'integer', 'min:0'],
+            'transactions_limit' => ['sometimes', 'integer', 'min:1', 'max:25'],
+        ]);
+
+        $transactionsStart = (int) ($validated['transactions_start'] ?? 0);
+        $transactionsLimit = (int) ($validated['transactions_limit'] ?? 25);
+
         try {
-            $block = $this->blockstreamApiClient->blockDetails($hash);
+            $block = $this->blockstreamApiClient->blockDetails($hash, $transactionsStart, $transactionsLimit);
         } catch (RuntimeException) {
             return response()->json([
                 'message' => 'Failed to load block details.',

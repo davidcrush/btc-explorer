@@ -11,6 +11,8 @@ use Throwable;
 
 class BlockstreamApiClient
 {
+    private const TRANSACTION_PAGE_SIZE = 25;
+
     /**
      * @return list<BtcBlockData>
      */
@@ -32,9 +34,11 @@ class BlockstreamApiClient
         return $this->hydrateBlocks($cachedBlocks);
     }
 
-    public function blockDetails(string $hash): ?BtcBlockDetailData
+    public function blockDetails(string $hash, int $transactionsStart = 0, int $transactionsLimit = self::TRANSACTION_PAGE_SIZE): ?BtcBlockDetailData
     {
-        $cacheKey = $this->blockDetailsCacheKey($hash);
+        $normalizedStart = $this->normalizeTransactionsStart($transactionsStart);
+        $normalizedLimit = $this->normalizeTransactionsLimit($transactionsLimit);
+        $cacheKey = $this->blockDetailsCacheKey($hash, $normalizedStart, $normalizedLimit);
         $cacheStore = Cache::store($this->cacheStore());
 
         try {
@@ -47,7 +51,7 @@ class BlockstreamApiClient
             // Ignore cache read failures and continue with upstream fetch.
         }
 
-        $payload = $this->fetchBlockDetailsPayload($hash);
+        $payload = $this->fetchBlockDetailsPayload($hash, $normalizedStart, $normalizedLimit);
 
         if (is_array($payload)) {
             try {
@@ -94,6 +98,10 @@ class BlockstreamApiClient
             difficulty: (string) ($payload['difficulty'] ?? '0'),
             previousBlockHash: $this->nullableString($payload['previous_block_hash'] ?? null),
             nextBlockHash: $this->nullableString($payload['next_block_hash'] ?? null),
+            transactionsStart: (int) ($payload['transactions_start'] ?? 0),
+            transactionsLimit: (int) ($payload['transactions_limit'] ?? self::TRANSACTION_PAGE_SIZE),
+            hasMoreTransactions: (bool) ($payload['has_more_transactions'] ?? false),
+            nextTransactionsStart: isset($payload['next_transactions_start']) ? (int) $payload['next_transactions_start'] : null,
             transactions: array_values(array_filter($transactions, static fn (mixed $txid): bool => is_string($txid))),
         );
     }
@@ -142,7 +150,7 @@ class BlockstreamApiClient
                 'weight' => (int) ($block['weight'] ?? 0),
                 'height' => (int) ($block['height'] ?? 0),
                 'total_transactions' => (int) ($block['tx_count'] ?? 0),
-                'transactions' => $this->fetchTransactionIds((string) $block['id']),
+                'transactions' => $this->fetchTransactionIdsPage((string) $block['id'], 0, self::TRANSACTION_PAGE_SIZE),
                 'timestamp' => (int) ($block['timestamp'] ?? 0),
                 'size' => (int) ($block['size'] ?? 0),
                 'difficulty' => (string) ($block['difficulty'] ?? '0'),
@@ -170,10 +178,14 @@ class BlockstreamApiClient
      *     difficulty: string,
      *     previous_block_hash: ?string,
      *     next_block_hash: ?string,
+     *     transactions_start: int,
+     *     transactions_limit: int,
+     *     has_more_transactions: bool,
+     *     next_transactions_start: ?int,
      *     transactions: list<string>
      * }|null
      */
-    private function fetchBlockDetailsPayload(string $hash): ?array
+    private function fetchBlockDetailsPayload(string $hash, int $transactionsStart, int $transactionsLimit): ?array
     {
         $response = Http::baseUrl($this->baseUrl())
             ->timeout($this->timeout())
@@ -195,6 +207,11 @@ class BlockstreamApiClient
         }
 
         $height = (int) ($block['height'] ?? 0);
+        $transactions = $this->fetchTransactionIdsPage((string) ($block['id'] ?? ''), $transactionsStart, $transactionsLimit);
+        $totalTransactions = (int) ($block['tx_count'] ?? 0);
+        $nextTransactionsStart = ($transactionsStart + count($transactions)) < $totalTransactions
+            ? ($transactionsStart + count($transactions))
+            : null;
 
         return [
             'hash' => (string) ($block['id'] ?? ''),
@@ -205,13 +222,17 @@ class BlockstreamApiClient
             'bits' => (string) ($block['bits'] ?? ''),
             'nonce' => (int) ($block['nonce'] ?? 0),
             'merkle_root' => (string) ($block['merkle_root'] ?? ''),
-            'total_transactions' => (int) ($block['tx_count'] ?? 0),
+            'total_transactions' => $totalTransactions,
             'size' => (int) ($block['size'] ?? 0),
             'weight' => (int) ($block['weight'] ?? 0),
             'difficulty' => (string) ($block['difficulty'] ?? '0'),
             'previous_block_hash' => $this->nullableString($block['previousblockhash'] ?? null),
             'next_block_hash' => $this->nextBlockHash($height),
-            'transactions' => $this->fetchTransactionIds((string) ($block['id'] ?? '')),
+            'transactions_start' => $transactionsStart,
+            'transactions_limit' => $transactionsLimit,
+            'has_more_transactions' => $nextTransactionsStart !== null,
+            'next_transactions_start' => $nextTransactionsStart,
+            'transactions' => $transactions,
         ];
     }
 
@@ -258,28 +279,48 @@ class BlockstreamApiClient
     /**
      * @return list<string>
      */
-    private function fetchTransactionIds(string $blockHash): array
+    private function fetchTransactionIdsPage(string $blockHash, int $transactionsStart, int $transactionsLimit): array
     {
+        if ($blockHash === '') {
+            return [];
+        }
+
+        $start = $this->normalizeTransactionsStart($transactionsStart);
+        $limit = $this->normalizeTransactionsLimit($transactionsLimit);
+        $endpoint = $start === 0
+            ? "/block/{$blockHash}/txs"
+            : "/block/{$blockHash}/txs/{$start}";
+
         $response = Http::baseUrl($this->baseUrl())
             ->timeout($this->timeout())
             ->acceptJson()
-            ->get("/block/{$blockHash}/txids");
+            ->get($endpoint);
 
         if (! $response->successful()) {
             return [];
         }
 
-        $txids = $response->json();
+        $transactions = $response->json();
 
-        if (! is_array($txids)) {
+        if (! is_array($transactions)) {
             return [];
         }
 
-        return array_slice(
-            array_values(array_filter($txids, static fn (mixed $txid): bool => is_string($txid))),
-            0,
-            25
-        );
+        $txids = [];
+
+        foreach ($transactions as $transaction) {
+            if (! is_array($transaction)) {
+                continue;
+            }
+
+            $txid = $transaction['txid'] ?? null;
+
+            if (is_string($txid) && $txid !== '') {
+                $txids[] = $txid;
+            }
+        }
+
+        return array_slice($txids, 0, $limit);
     }
 
     private function baseUrl(): string
@@ -307,9 +348,9 @@ class BlockstreamApiClient
         return "btc:blockstream:v3:latest-blocks:limit:{$limit}";
     }
 
-    private function blockDetailsCacheKey(string $hash): string
+    private function blockDetailsCacheKey(string $hash, int $transactionsStart, int $transactionsLimit): string
     {
-        return "btc:blockstream:v2:block-details:{$hash}";
+        return "btc:blockstream:v3:block-details:{$hash}:start:{$transactionsStart}:limit:{$transactionsLimit}";
     }
 
     /**
@@ -357,5 +398,23 @@ class BlockstreamApiClient
         $trimmed = trim($value);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function normalizeTransactionsStart(int $transactionsStart): int
+    {
+        if ($transactionsStart < 0) {
+            return 0;
+        }
+
+        return intdiv($transactionsStart, self::TRANSACTION_PAGE_SIZE) * self::TRANSACTION_PAGE_SIZE;
+    }
+
+    private function normalizeTransactionsLimit(int $transactionsLimit): int
+    {
+        if ($transactionsLimit < 1) {
+            return self::TRANSACTION_PAGE_SIZE;
+        }
+
+        return min($transactionsLimit, self::TRANSACTION_PAGE_SIZE);
     }
 }

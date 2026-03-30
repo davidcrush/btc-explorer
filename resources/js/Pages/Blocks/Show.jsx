@@ -16,21 +16,41 @@ import AppLayout from '../../Layouts/AppLayout';
 
 export default function Show({ hash }) {
     const [block, setBlock] = useState(null);
+    const [transactions, setTransactions] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
 
-    const fetchBlock = useCallback(async () => {
-        setLoading(true);
-        setError(null);
-
+    const fetchBlock = useCallback(async (start = 0, append = false) => {
+        if (append) {
+            setLoadingMore(true);
+        } else {
+            setLoading(true);
+            setError(null);
+        }
         try {
-            const response = await axios.get(`/api/v1/btc/blocks/${hash}`);
-            setBlock(response?.data?.data?.block ?? null);
+            const response = await axios.get(`/api/v1/btc/blocks/${hash}`, {
+                params: {
+                    transactions_start: start,
+                    transactions_limit: 25,
+                },
+            });
+
+            const payload = response?.data?.data?.block ?? null;
+            setBlock(payload);
+            setTransactions((current) =>
+                append ? [...current, ...(payload?.transactions ?? [])] : (payload?.transactions ?? [])
+            );
         } catch {
             setError('Unable to load block details right now.');
             setBlock(null);
+            setTransactions([]);
         } finally {
-            setLoading(false);
+            if (append) {
+                setLoadingMore(false);
+            } else {
+                setLoading(false);
+            }
         }
     }, [hash]);
 
@@ -52,7 +72,7 @@ export default function Show({ hash }) {
                             <Button variant="outline" onClick={() => router.visit('/blocks')}>
                                 Back to blocks
                             </Button>
-                            <Button colorPalette="orange" onClick={fetchBlock}>
+                            <Button colorPalette="orange" onClick={() => fetchBlock(0, false)}>
                                 Refresh
                             </Button>
                         </HStack>
@@ -137,10 +157,10 @@ export default function Show({ hash }) {
 
                             <Box borderWidth="1px" borderColor="gray.700" rounded="lg" p={4} bg="gray.900">
                                 <Text fontWeight="medium" mb={3}>
-                                    Transactions (up to 25)
+                                    Transactions ({transactions.length} of {block.total_transactions})
                                 </Text>
                                 <Stack gap={2}>
-                                    {block.transactions.map((txid) => (
+                                    {transactions.map((txid) => (
                                         <Code
                                             key={txid}
                                             whiteSpace="normal"
@@ -150,10 +170,25 @@ export default function Show({ hash }) {
                                             {txid}
                                         </Code>
                                     ))}
-                                    {block.transactions.length === 0 && (
+                                    {transactions.length === 0 && (
                                         <Text color="gray.400">No transactions available.</Text>
                                     )}
                                 </Stack>
+                                {block.has_more_transactions && (
+                                    <Box mt={4}>
+                                        <Button
+                                            variant="link"
+                                            colorPalette="orange"
+                                            disabled={loadingMore || block.next_transactions_start === null}
+                                            onClick={() =>
+                                                block.next_transactions_start !== null &&
+                                                fetchBlock(block.next_transactions_start, true)
+                                            }
+                                        >
+                                            {loadingMore ? 'Loading...' : 'Load more'}
+                                        </Button>
+                                    </Box>
+                                )}
                             </Box>
                         </Stack>
                     )}

@@ -22,6 +22,10 @@ final readonly class BtcBlockDetailData
         public string $difficulty,
         public ?string $previousBlockHash,
         public ?string $nextBlockHash,
+        public int $transactionsStart,
+        public int $transactionsLimit,
+        public bool $hasMoreTransactions,
+        public ?int $nextTransactionsStart,
         public array $transactions,
     ) {}
 
@@ -41,6 +45,10 @@ final readonly class BtcBlockDetailData
      *     difficulty: string,
      *     previous_block_hash: ?string,
      *     next_block_hash: ?string,
+     *     transactions_start: int,
+     *     transactions_limit: int,
+     *     has_more_transactions: bool,
+     *     next_transactions_start: ?int,
      *     transactions: list<string>
      * }
      */
@@ -61,6 +69,10 @@ final readonly class BtcBlockDetailData
             'difficulty' => $this->difficulty,
             'previous_block_hash' => $this->previousBlockHash,
             'next_block_hash' => $this->nextBlockHash,
+            'transactions_start' => $this->transactionsStart,
+            'transactions_limit' => $this->transactionsLimit,
+            'has_more_transactions' => $this->hasMoreTransactions,
+            'next_transactions_start' => $this->nextTransactionsStart,
             'transactions' => $this->transactions,
         ];
     }

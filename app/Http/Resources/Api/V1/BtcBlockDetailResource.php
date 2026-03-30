@@ -25,6 +25,10 @@ class BtcBlockDetailResource extends JsonResource
      *     difficulty: string,
      *     previous_block_hash: ?string,
      *     next_block_hash: ?string,
+     *     transactions_start: int,
+     *     transactions_limit: int,
+     *     has_more_transactions: bool,
+     *     next_transactions_start: ?int,
      *     transactions: list<string>
      * }
      */

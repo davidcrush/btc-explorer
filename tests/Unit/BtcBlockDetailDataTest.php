@@ -24,6 +24,10 @@ class BtcBlockDetailDataTest extends TestCase
             difficulty: '90523123123.111',
             previousBlockHash: 'prev-hash',
             nextBlockHash: 'next-hash',
+            transactionsStart: 0,
+            transactionsLimit: 25,
+            hasMoreTransactions: true,
+            nextTransactionsStart: 25,
             transactions: ['txid-1', 'txid-2'],
         );
 
@@ -42,6 +46,10 @@ class BtcBlockDetailDataTest extends TestCase
             'difficulty' => '90523123123.111',
             'previous_block_hash' => 'prev-hash',
             'next_block_hash' => 'next-hash',
+            'transactions_start' => 0,
+            'transactions_limit' => 25,
+            'has_more_transactions' => true,
+            'next_transactions_start' => 25,
             'transactions' => ['txid-1', 'txid-2'],
         ], $block->toArray());
     }

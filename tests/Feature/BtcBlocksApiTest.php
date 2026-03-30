@@ -19,7 +19,7 @@ class BtcBlocksApiTest extends TestCase
     {
         Http::fake([
             'https://blockstream.info/api/blocks' => Http::response($this->fakeBlocks(12), 200),
-            'https://blockstream.info/api/block/*/txids' => Http::response(['txid-a', 'txid-b'], 200),
+            'https://blockstream.info/api/block/*/txs*' => Http::response($this->fakeTransactions(2), 200),
         ]);
 
         $response = $this->getJson('/api/v1/btc/blocks');
@@ -29,7 +29,7 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonCount(10, 'data.blocks')
             ->assertJsonPath('data.blocks.0.hash', 'block-hash-1')
             ->assertJsonPath('data.blocks.0.total_transactions', 3001)
-            ->assertJsonPath('data.blocks.0.transactions.0', 'txid-a')
+            ->assertJsonPath('data.blocks.0.transactions.0', 'txid-1')
             ->assertJsonStructure([
                 'data' => [
                     'blocks' => [
@@ -78,7 +78,7 @@ class BtcBlocksApiTest extends TestCase
     {
         Http::fake([
             'https://blockstream.info/api/blocks' => Http::response($this->fakeBlocks(1), 200),
-            'https://blockstream.info/api/block/*/txids' => Http::response($this->fakeTxids(40), 200),
+            'https://blockstream.info/api/block/*/txs*' => Http::response($this->fakeTransactions(40), 200),
         ]);
 
         $response = $this->getJson('/api/v1/btc/blocks?limit=1');
@@ -94,13 +94,13 @@ class BtcBlocksApiTest extends TestCase
     {
         Http::fake([
             'https://blockstream.info/api/blocks' => Http::response($this->fakeBlocks(1), 200),
-            'https://blockstream.info/api/block/*/txids' => Http::response($this->fakeTxids(3), 200),
+            'https://blockstream.info/api/block/*/txs*' => Http::response($this->fakeTransactions(3), 200),
         ]);
 
         $this->getJson('/api/v1/btc/blocks?limit=1')->assertOk();
         $this->getJson('/api/v1/btc/blocks?limit=1')->assertOk();
 
-        // First request makes two upstream calls (/blocks + /block/:hash/txids).
+        // First request makes two upstream calls (/blocks + /block/:hash/txs).
         // Second request is served from cache.
         Http::assertSentCount(2);
     }
@@ -112,7 +112,7 @@ class BtcBlocksApiTest extends TestCase
                 $this->fakeBlockDetail('block-hash-1', 900_000, 'prev-hash'),
                 200
             ),
-            'https://blockstream.info/api/block/block-hash-1/txids' => Http::response($this->fakeTxids(40), 200),
+            'https://blockstream.info/api/block/block-hash-1/txs' => Http::response($this->fakeTransactions(25), 200),
             'https://blockstream.info/api/block-height/900001' => Http::response('next-hash', 200),
         ]);
 
@@ -124,7 +124,30 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonPath('data.block.previous_block_hash', 'prev-hash')
             ->assertJsonPath('data.block.next_block_hash', 'next-hash')
             ->assertJsonPath('data.block.total_transactions', 3200)
+            ->assertJsonPath('data.block.has_more_transactions', true)
+            ->assertJsonPath('data.block.next_transactions_start', 25)
             ->assertJsonCount(25, 'data.block.transactions');
+    }
+
+    public function test_it_supports_loading_next_transaction_page(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/block/block-hash-1' => Http::response(
+                $this->fakeBlockDetail('block-hash-1', 900_000, 'prev-hash'),
+                200
+            ),
+            'https://blockstream.info/api/block/block-hash-1/txs/25' => Http::response($this->fakeTransactions(25, 26), 200),
+            'https://blockstream.info/api/block-height/900001' => Http::response('next-hash', 200),
+        ]);
+
+        $response = $this->getJson('/api/v1/btc/blocks/block-hash-1?transactions_start=25');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.block.transactions_start', 25)
+            ->assertJsonPath('data.block.transactions.0', 'txid-26')
+            ->assertJsonPath('data.block.has_more_transactions', true)
+            ->assertJsonPath('data.block.next_transactions_start', 50);
     }
 
     public function test_it_returns_null_navigation_when_previous_or_next_do_not_exist(): void
@@ -134,7 +157,7 @@ class BtcBlocksApiTest extends TestCase
                 $this->fakeBlockDetail('genesis-hash', 0, null),
                 200
             ),
-            'https://blockstream.info/api/block/genesis-hash/txids' => Http::response($this->fakeTxids(2), 200),
+            'https://blockstream.info/api/block/genesis-hash/txs' => Http::response($this->fakeTransactions(2), 200),
             'https://blockstream.info/api/block-height/1' => Http::response('', 404),
         ]);
 
@@ -182,17 +205,19 @@ class BtcBlocksApiTest extends TestCase
     }
 
     /**
-     * @return list<string>
+     * @return list<array{txid: string}>
      */
-    private function fakeTxids(int $count): array
+    private function fakeTransactions(int $count, int $start = 1): array
     {
-        $txids = [];
+        $transactions = [];
 
-        for ($i = 1; $i <= $count; $i++) {
-            $txids[] = "txid-{$i}";
+        for ($i = $start; $i < ($start + $count); $i++) {
+            $transactions[] = [
+                'txid' => "txid-{$i}",
+            ];
         }
 
-        return $txids;
+        return $transactions;
     }
 
     /**
