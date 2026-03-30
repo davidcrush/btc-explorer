@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\DataTransferObjects\BtcBlockData;
+use App\DataTransferObjects\BtcBlockDetailData;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -29,6 +30,72 @@ class BlockstreamApiClient
         }
 
         return $this->hydrateBlocks($cachedBlocks);
+    }
+
+    public function blockDetails(string $hash): ?BtcBlockDetailData
+    {
+        $cacheKey = $this->blockDetailsCacheKey($hash);
+        $cacheStore = Cache::store($this->cacheStore());
+
+        try {
+            $cachedPayload = $cacheStore->get($cacheKey);
+
+            if (is_array($cachedPayload)) {
+                return $this->hydrateBlockDetail($cachedPayload);
+            }
+        } catch (Throwable) {
+            // Ignore cache read failures and continue with upstream fetch.
+        }
+
+        $payload = $this->fetchBlockDetailsPayload($hash);
+
+        if (is_array($payload)) {
+            try {
+                $cacheStore->put(
+                    $cacheKey,
+                    $payload,
+                    now()->addSeconds($this->blockDetailsTtl($payload)),
+                );
+            } catch (Throwable) {
+                // Ignore cache write failures.
+            }
+        }
+
+        return $this->hydrateBlockDetail($payload);
+    }
+
+    /**
+     * @param  mixed  $payload
+     */
+    private function hydrateBlockDetail(mixed $payload): ?BtcBlockDetailData
+    {
+        if (! is_array($payload)) {
+            return null;
+        }
+
+        $transactions = $payload['transactions'] ?? [];
+
+        if (! is_array($transactions)) {
+            $transactions = [];
+        }
+
+        return new BtcBlockDetailData(
+            hash: (string) ($payload['hash'] ?? ''),
+            height: (int) ($payload['height'] ?? 0),
+            version: (int) ($payload['version'] ?? 0),
+            timestamp: (int) ($payload['timestamp'] ?? 0),
+            mediantime: (int) ($payload['mediantime'] ?? 0),
+            bits: (string) ($payload['bits'] ?? ''),
+            nonce: (int) ($payload['nonce'] ?? 0),
+            merkleRoot: (string) ($payload['merkle_root'] ?? ''),
+            txCount: (int) ($payload['total_transactions'] ?? 0),
+            size: (int) ($payload['size'] ?? 0),
+            weight: (int) ($payload['weight'] ?? 0),
+            difficulty: (string) ($payload['difficulty'] ?? '0'),
+            previousBlockHash: $this->nullableString($payload['previous_block_hash'] ?? null),
+            nextBlockHash: $this->nullableString($payload['next_block_hash'] ?? null),
+            transactions: array_values(array_filter($transactions, static fn (mixed $txid): bool => is_string($txid))),
+        );
     }
 
     /**
@@ -85,6 +152,67 @@ class BlockstreamApiClient
         }
 
         return $mapped;
+    }
+
+    /**
+     * @return array{
+     *     hash: string,
+     *     height: int,
+     *     version: int,
+     *     timestamp: int,
+     *     mediantime: int,
+     *     bits: string,
+     *     nonce: int,
+     *     merkle_root: string,
+     *     total_transactions: int,
+     *     size: int,
+     *     weight: int,
+     *     difficulty: string,
+     *     previous_block_hash: ?string,
+     *     next_block_hash: ?string,
+     *     transactions: list<string>
+     * }|null
+     */
+    private function fetchBlockDetailsPayload(string $hash): ?array
+    {
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get("/block/{$hash}");
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException('Unable to fetch block details from Blockstream.');
+        }
+
+        $block = $response->json();
+
+        if (! is_array($block)) {
+            throw new RuntimeException('Unexpected Blockstream block details format.');
+        }
+
+        $height = (int) ($block['height'] ?? 0);
+
+        return [
+            'hash' => (string) ($block['id'] ?? ''),
+            'height' => $height,
+            'version' => (int) ($block['version'] ?? 0),
+            'timestamp' => (int) ($block['timestamp'] ?? 0),
+            'mediantime' => (int) ($block['mediantime'] ?? 0),
+            'bits' => (string) ($block['bits'] ?? ''),
+            'nonce' => (int) ($block['nonce'] ?? 0),
+            'merkle_root' => (string) ($block['merkle_root'] ?? ''),
+            'total_transactions' => (int) ($block['tx_count'] ?? 0),
+            'size' => (int) ($block['size'] ?? 0),
+            'weight' => (int) ($block['weight'] ?? 0),
+            'difficulty' => (string) ($block['difficulty'] ?? '0'),
+            'previous_block_hash' => $this->nullableString($block['previousblockhash'] ?? null),
+            'next_block_hash' => $this->nextBlockHash($height),
+            'transactions' => $this->fetchTransactionIds((string) ($block['id'] ?? '')),
+        ];
     }
 
     /**
@@ -177,5 +305,57 @@ class BlockstreamApiClient
     private function latestBlocksCacheKey(int $limit): string
     {
         return "btc:blockstream:v3:latest-blocks:limit:{$limit}";
+    }
+
+    private function blockDetailsCacheKey(string $hash): string
+    {
+        return "btc:blockstream:v2:block-details:{$hash}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function blockDetailsTtl(array $payload): int
+    {
+        return $this->nullableString($payload['next_block_hash'] ?? null) !== null
+            ? $this->blockDetailStableTtl()
+            : $this->blockDetailHotTtl();
+    }
+
+    private function blockDetailHotTtl(): int
+    {
+        return (int) config('services.blockstream.block_detail_hot_ttl', $this->cacheTtl());
+    }
+
+    private function blockDetailStableTtl(): int
+    {
+        return (int) config('services.blockstream.block_detail_stable_ttl', 86400);
+    }
+
+    private function nextBlockHash(int $height): ?string
+    {
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get('/block-height/'.($height + 1));
+
+        if (! $response->successful()) {
+            return null;
+        }
+
+        $hash = trim((string) $response->body());
+
+        return $hash !== '' ? $hash : null;
+    }
+
+    private function nullableString(mixed $value): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $trimmed = trim($value);
+
+        return $trimmed === '' ? null : $trimmed;
     }
 }

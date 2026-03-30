@@ -1,4 +1,4 @@
-import { Head } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import {
     Badge,
     Box,
@@ -76,6 +76,8 @@ export default function Index() {
                                     rounded="lg"
                                     p={4}
                                     bg="gray.900"
+                                    cursor="pointer"
+                                    onClick={() => router.visit(`/blocks/${block.hash}`)}
                                 >
                                     <Stack gap={3}>
                                         <HStack>

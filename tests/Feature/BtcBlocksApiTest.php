@@ -105,6 +105,58 @@ class BtcBlocksApiTest extends TestCase
         Http::assertSentCount(2);
     }
 
+    public function test_it_returns_block_details_with_navigation_hashes(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/block/block-hash-1' => Http::response(
+                $this->fakeBlockDetail('block-hash-1', 900_000, 'prev-hash'),
+                200
+            ),
+            'https://blockstream.info/api/block/block-hash-1/txids' => Http::response($this->fakeTxids(40), 200),
+            'https://blockstream.info/api/block-height/900001' => Http::response('next-hash', 200),
+        ]);
+
+        $response = $this->getJson('/api/v1/btc/blocks/block-hash-1');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.block.hash', 'block-hash-1')
+            ->assertJsonPath('data.block.previous_block_hash', 'prev-hash')
+            ->assertJsonPath('data.block.next_block_hash', 'next-hash')
+            ->assertJsonPath('data.block.total_transactions', 3200)
+            ->assertJsonCount(25, 'data.block.transactions');
+    }
+
+    public function test_it_returns_null_navigation_when_previous_or_next_do_not_exist(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/block/genesis-hash' => Http::response(
+                $this->fakeBlockDetail('genesis-hash', 0, null),
+                200
+            ),
+            'https://blockstream.info/api/block/genesis-hash/txids' => Http::response($this->fakeTxids(2), 200),
+            'https://blockstream.info/api/block-height/1' => Http::response('', 404),
+        ]);
+
+        $response = $this->getJson('/api/v1/btc/blocks/genesis-hash');
+
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.block.previous_block_hash', null)
+            ->assertJsonPath('data.block.next_block_hash', null);
+    }
+
+    public function test_it_returns_not_found_when_block_does_not_exist(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/block/unknown-hash' => Http::response('', 404),
+        ]);
+
+        $response = $this->getJson('/api/v1/btc/blocks/unknown-hash');
+
+        $response->assertNotFound();
+    }
+
     /**
      * @return list<array<string, int|string>>
      */
@@ -141,5 +193,27 @@ class BtcBlocksApiTest extends TestCase
         }
 
         return $txids;
+    }
+
+    /**
+     * @return array<string, int|string|null>
+     */
+    private function fakeBlockDetail(string $hash, int $height, ?string $previousHash): array
+    {
+        return [
+            'id' => $hash,
+            'height' => $height,
+            'version' => 123456,
+            'timestamp' => 1_700_100_000,
+            'mediantime' => 1_700_099_800,
+            'bits' => '170d5f7a',
+            'nonce' => 987654,
+            'merkle_root' => 'detail-merkle-root',
+            'tx_count' => 3200,
+            'size' => 1_700_000,
+            'weight' => 3_990_000,
+            'difficulty' => '90523123123.111',
+            'previousblockhash' => $previousHash,
+        ];
     }
 }

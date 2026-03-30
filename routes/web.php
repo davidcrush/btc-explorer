@@ -10,3 +10,9 @@ Route::get('/', function () {
 Route::get('/blocks', function () {
     return Inertia::render('Blocks/Index');
 });
+
+Route::get('/blocks/{hash}', function (string $hash) {
+    return Inertia::render('Blocks/Show', [
+        'hash' => $hash,
+    ]);
+});
