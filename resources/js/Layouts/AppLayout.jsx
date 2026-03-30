@@ -1,10 +1,13 @@
 import { usePage, router } from '@inertiajs/react';
 import { Box, Button, Container, Flex, Heading, HStack, Text } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
+import { useUserPreferences } from '../contexts/UserPreferencesContext';
 
 export default function AppLayout({ title, subtitle, children }) {
     const { url } = usePage();
     const [colorMode, setColorMode] = useState('dark');
+    const [showProfile, setShowProfile] = useState(false);
+    const { amountUnit, setAmountUnit } = useUserPreferences();
 
     useEffect(() => {
         const saved = window.localStorage.getItem('color-mode');
@@ -55,13 +58,77 @@ export default function AppLayout({ title, subtitle, children }) {
                             </Button>
                         </HStack>
 
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => setColorMode(isDark ? 'light' : 'dark')}
-                        >
-                            {isDark ? 'Light mode' : 'Dark mode'}
-                        </Button>
+                        <HStack>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setColorMode(isDark ? 'light' : 'dark')}
+                            >
+                                {isDark ? 'Light mode' : 'Dark mode'}
+                            </Button>
+                            <Box position="relative">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => setShowProfile((open) => !open)}
+                                >
+                                    Profile
+                                </Button>
+                                {showProfile && (
+                                    <Box
+                                        position="absolute"
+                                        top="calc(100% + 8px)"
+                                        right={0}
+                                        minW="220px"
+                                        borderWidth="1px"
+                                        borderColor={palette.panelBorder}
+                                        rounded="md"
+                                        bg={palette.panel}
+                                        p={3}
+                                        zIndex={10}
+                                        boxShadow="md"
+                                    >
+                                        <Text fontSize="sm" fontWeight="medium" mb={2}>
+                                            Amount Unit
+                                        </Text>
+                                        <HStack wrap="wrap">
+                                            <Button
+                                                size="xs"
+                                                variant={amountUnit === 'bitcoin' ? 'solid' : 'outline'}
+                                                colorPalette="orange"
+                                                onClick={() => setAmountUnit('bitcoin')}
+                                            >
+                                                btc
+                                            </Button>
+                                            <Button
+                                                size="xs"
+                                                variant={amountUnit === 'millibit' ? 'solid' : 'outline'}
+                                                colorPalette="orange"
+                                                onClick={() => setAmountUnit('millibit')}
+                                            >
+                                                mBTC
+                                            </Button>
+                                            <Button
+                                                size="xs"
+                                                variant={amountUnit === 'bit' ? 'solid' : 'outline'}
+                                                colorPalette="orange"
+                                                onClick={() => setAmountUnit('bit')}
+                                            >
+                                                μBTC
+                                            </Button>
+                                            <Button
+                                                size="xs"
+                                                variant={amountUnit === 'satoshi' ? 'solid' : 'outline'}
+                                                colorPalette="orange"
+                                                onClick={() => setAmountUnit('satoshi')}
+                                            >
+                                                sat
+                                            </Button>
+                                        </HStack>
+                                    </Box>
+                                )}
+                            </Box>
+                        </HStack>
                     </Flex>
                 </Container>
             </Box>

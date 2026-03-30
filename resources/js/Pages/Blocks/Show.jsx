@@ -13,6 +13,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import AppLayout from '../../Layouts/AppLayout';
+import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 
 export default function Show({ hash }) {
     const [block, setBlock] = useState(null);
@@ -20,45 +21,7 @@ export default function Show({ hash }) {
     const [loading, setLoading] = useState(true);
     const [loadingMore, setLoadingMore] = useState(false);
     const [error, setError] = useState(null);
-    const [amountUnit, setAmountUnit] = useState('bitcoin');
-
-    useEffect(() => {
-        const storedUnit = window.localStorage.getItem('amount-unit');
-        if (storedUnit === 'bitcoin' || storedUnit === 'millibit' || storedUnit === 'bit' || storedUnit === 'satoshi') {
-            setAmountUnit(storedUnit);
-        }
-    }, []);
-
-    useEffect(() => {
-        window.localStorage.setItem('amount-unit', amountUnit);
-    }, [amountUnit]);
-
-    const formatAmount = (value) => {
-        const sats = Number(value || 0);
-
-        if (amountUnit === 'bitcoin') {
-            return `${new Intl.NumberFormat(undefined, {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 8,
-            }).format(sats / 100000000)} btc`;
-        }
-
-        if (amountUnit === 'millibit') {
-            return `${new Intl.NumberFormat(undefined, {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 5,
-            }).format(sats / 100000)} mBTC`;
-        }
-
-        if (amountUnit === 'bit') {
-            return `${new Intl.NumberFormat(undefined, {
-                minimumFractionDigits: 0,
-                maximumFractionDigits: 2,
-            }).format(sats / 100)} μBTC`;
-        }
-
-        return `${new Intl.NumberFormat().format(sats)} sat`;
-    };
+    const { formatAmount } = useUserPreferences();
 
     const fetchBlock = useCallback(async (start = 0, append = false) => {
         if (append) {
@@ -113,43 +76,6 @@ export default function Show({ hash }) {
                             </Button>
                             <Button colorPalette="orange" onClick={() => fetchBlock(0, false)}>
                                 Refresh
-                            </Button>
-                        </HStack>
-                        <HStack>
-                            <Text fontSize="sm" color="gray.300">
-                                Amount unit:
-                            </Text>
-                            <Button
-                                size="sm"
-                                variant={amountUnit === 'bitcoin' ? 'solid' : 'outline'}
-                                colorPalette="orange"
-                                onClick={() => setAmountUnit('bitcoin')}
-                            >
-                                btc
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={amountUnit === 'millibit' ? 'solid' : 'outline'}
-                                colorPalette="orange"
-                                onClick={() => setAmountUnit('millibit')}
-                            >
-                                mBTC
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={amountUnit === 'bit' ? 'solid' : 'outline'}
-                                colorPalette="orange"
-                                onClick={() => setAmountUnit('bit')}
-                            >
-                                μBTC
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant={amountUnit === 'satoshi' ? 'solid' : 'outline'}
-                                colorPalette="orange"
-                                onClick={() => setAmountUnit('satoshi')}
-                            >
-                                sat
                             </Button>
                         </HStack>
                     </Flex>

@@ -13,17 +13,13 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import axios from 'axios';
 import AppLayout from '../../Layouts/AppLayout';
+import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 
 export default function Index() {
     const [blocks, setBlocks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
-
-    const formatBtc = (value) =>
-        `${new Intl.NumberFormat(undefined, {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 8,
-        }).format(Number(value || 0) / 100000000)} btc`;
+    const { formatAmount } = useUserPreferences();
 
     const fetchBlocks = useCallback(async () => {
         setLoading(true);
@@ -106,10 +102,10 @@ export default function Index() {
                                                 Miner: {block.miner ?? 'Unknown'}
                                             </Text>
                                             <Text fontSize="sm" color="gray.300">
-                                                Reward: {formatBtc(block.block_reward)}
+                                                Reward: {formatAmount(block.block_reward)}
                                             </Text>
                                             <Text fontSize="sm" color="gray.300">
-                                                Fees: {formatBtc(block.total_fees)}
+                                                Fees: {formatAmount(block.total_fees)}
                                             </Text>
                                             <Text fontSize="sm" color="gray.300">
                                                 Size: {block.size}

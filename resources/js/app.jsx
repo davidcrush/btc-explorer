@@ -5,6 +5,7 @@ import { createInertiaApp } from '@inertiajs/react';
 import { ChakraProvider, defaultSystem } from '@chakra-ui/react';
 import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
+import { UserPreferencesProvider } from './contexts/UserPreferencesContext';
 
 const appName = import.meta.env.VITE_APP_NAME || 'BTC Explorer';
 
@@ -20,7 +21,9 @@ createInertiaApp({
 
         root.render(
             <ChakraProvider value={defaultSystem}>
-                <App {...props} />
+                <UserPreferencesProvider>
+                    <App {...props} />
+                </UserPreferencesProvider>
             </ChakraProvider>
         );
     },
