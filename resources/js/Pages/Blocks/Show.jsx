@@ -186,10 +186,19 @@ export default function Show({ hash }) {
                                     Merkle root: {block.merkle_root}
                                 </Text>
                                 <Text fontSize="sm" color="gray.300">
+                                    Miner: {block.miner ?? 'Unknown'}
+                                </Text>
+                                <Text fontSize="sm" color="gray.300">
                                     Bits: {block.bits}
                                 </Text>
                                 <Text fontSize="sm" color="gray.300">
                                     Difficulty: {block.difficulty}
+                                </Text>
+                                <Text fontSize="sm" color="gray.300">
+                                    Block reward: {formatAmount(block.block_reward)}
+                                </Text>
+                                <Text fontSize="sm" color="gray.300">
+                                    Total fees: {formatAmount(block.total_fees)}
                                 </Text>
                                 <Text fontSize="sm" color="gray.300">
                                     Nonce: {block.nonce}

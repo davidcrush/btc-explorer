@@ -13,6 +13,9 @@ class BtcBlockDataTest extends TestCase
             hash: '0000000000000000000238b4c7f36fef6f1759e68d5974f274b58276a2fca001',
             weight: 3992032,
             height: 891234,
+            miner: 'FakePool',
+            blockReward: 312500000,
+            totalFees: 12000,
             totalTransactions: 2689,
             transactions: [
                 'fce7cbcb57bcfbe3083bdbf531f6f301f6b66d8402ec4efd9ecf8b17e5f0d4a5',
@@ -28,6 +31,9 @@ class BtcBlockDataTest extends TestCase
             'hash' => '0000000000000000000238b4c7f36fef6f1759e68d5974f274b58276a2fca001',
             'weight' => 3992032,
             'height' => 891234,
+            'miner' => 'FakePool',
+            'block_reward' => 312500000,
+            'total_fees' => 12000,
             'total_transactions' => 2689,
             'transactions' => [
                 'fce7cbcb57bcfbe3083bdbf531f6f301f6b66d8402ec4efd9ecf8b17e5f0d4a5',

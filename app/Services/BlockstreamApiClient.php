@@ -89,9 +89,12 @@ class BlockstreamApiClient
             version: (int) ($payload['version'] ?? 0),
             timestamp: (int) ($payload['timestamp'] ?? 0),
             mediantime: (int) ($payload['mediantime'] ?? 0),
+            miner: $this->nullableString($payload['miner'] ?? null),
             bits: (string) ($payload['bits'] ?? ''),
             nonce: (int) ($payload['nonce'] ?? 0),
             merkleRoot: (string) ($payload['merkle_root'] ?? ''),
+            blockReward: (int) ($payload['block_reward'] ?? 0),
+            totalFees: (int) ($payload['total_fees'] ?? 0),
             txCount: (int) ($payload['total_transactions'] ?? 0),
             size: (int) ($payload['size'] ?? 0),
             weight: (int) ($payload['weight'] ?? 0),
@@ -111,6 +114,9 @@ class BlockstreamApiClient
      *     hash: string,
      *     weight: int,
      *     height: int,
+     *     miner: ?string,
+     *     block_reward: int,
+     *     total_fees: int,
      *     total_transactions: int,
      *     transactions: list<string>,
      *     timestamp: int,
@@ -145,10 +151,16 @@ class BlockstreamApiClient
                 continue;
             }
 
+            $height = (int) ($block['height'] ?? 0);
+            $economics = $this->fetchBlockEconomics((string) $block['id'], $height);
+
             $mapped[] = [
                 'hash' => (string) $block['id'],
                 'weight' => (int) ($block['weight'] ?? 0),
-                'height' => (int) ($block['height'] ?? 0),
+                'height' => $height,
+                'miner' => $economics['miner'],
+                'block_reward' => $economics['block_reward'],
+                'total_fees' => $economics['total_fees'],
                 'total_transactions' => (int) ($block['tx_count'] ?? 0),
                 'transactions' => $this->fetchTransactionIdsPage((string) $block['id'], 0, self::TRANSACTION_PAGE_SIZE),
                 'timestamp' => (int) ($block['timestamp'] ?? 0),
@@ -172,6 +184,8 @@ class BlockstreamApiClient
      *     bits: string,
      *     nonce: int,
      *     merkle_root: string,
+     *     block_reward: int,
+     *     total_fees: int,
      *     total_transactions: int,
      *     size: int,
      *     weight: int,
@@ -215,6 +229,7 @@ class BlockstreamApiClient
         }
 
         $height = (int) ($block['height'] ?? 0);
+        $economics = $this->fetchBlockEconomics((string) ($block['id'] ?? ''), $height);
         $transactions = $this->fetchTransactionOverviewsPage((string) ($block['id'] ?? ''), $transactionsStart, $transactionsLimit);
         $totalTransactions = (int) ($block['tx_count'] ?? 0);
         $nextTransactionsStart = ($transactionsStart + count($transactions)) < $totalTransactions
@@ -227,9 +242,12 @@ class BlockstreamApiClient
             'version' => (int) ($block['version'] ?? 0),
             'timestamp' => (int) ($block['timestamp'] ?? 0),
             'mediantime' => (int) ($block['mediantime'] ?? 0),
+            'miner' => $economics['miner'],
             'bits' => (string) ($block['bits'] ?? ''),
             'nonce' => (int) ($block['nonce'] ?? 0),
             'merkle_root' => (string) ($block['merkle_root'] ?? ''),
+            'block_reward' => $economics['block_reward'],
+            'total_fees' => $economics['total_fees'],
             'total_transactions' => $totalTransactions,
             'size' => (int) ($block['size'] ?? 0),
             'weight' => (int) ($block['weight'] ?? 0),
@@ -271,6 +289,9 @@ class BlockstreamApiClient
                 hash: (string) ($block['hash'] ?? ''),
                 weight: (int) ($block['weight'] ?? 0),
                 height: (int) ($block['height'] ?? 0),
+                miner: $this->nullableString($block['miner'] ?? null),
+                blockReward: (int) ($block['block_reward'] ?? 0),
+                totalFees: (int) ($block['total_fees'] ?? 0),
                 totalTransactions: (int) ($block['total_transactions'] ?? count($transactions)),
                 transactions: array_values(array_filter($transactions, static fn (mixed $txid): bool => is_string($txid))),
                 timestamp: (int) ($block['timestamp'] ?? 0),
@@ -323,24 +344,7 @@ class BlockstreamApiClient
 
         $start = $this->normalizeTransactionsStart($transactionsStart);
         $limit = $this->normalizeTransactionsLimit($transactionsLimit);
-        $endpoint = $start === 0
-            ? "/block/{$blockHash}/txs"
-            : "/block/{$blockHash}/txs/{$start}";
-
-        $response = Http::baseUrl($this->baseUrl())
-            ->timeout($this->timeout())
-            ->acceptJson()
-            ->get($endpoint);
-
-        if (! $response->successful()) {
-            return [];
-        }
-
-        $transactions = $response->json();
-
-        if (! is_array($transactions)) {
-            return [];
-        }
+        $transactions = $this->fetchBlockTransactionsPageRaw($blockHash, $start);
 
         $txs = [];
         $order = 0;
@@ -423,12 +427,12 @@ class BlockstreamApiClient
 
     private function latestBlocksCacheKey(int $limit): string
     {
-        return "btc:blockstream:v3:latest-blocks:limit:{$limit}";
+        return "btc:blockstream:v4:latest-blocks:limit:{$limit}";
     }
 
     private function blockDetailsCacheKey(string $hash, int $transactionsStart, int $transactionsLimit): string
     {
-        return "btc:blockstream:v3:block-details:{$hash}:start:{$transactionsStart}:limit:{$transactionsLimit}";
+        return "btc:blockstream:v4:block-details:{$hash}:start:{$transactionsStart}:limit:{$transactionsLimit}";
     }
 
     /**
@@ -476,6 +480,207 @@ class BlockstreamApiClient
         $trimmed = trim($value);
 
         return $trimmed === '' ? null : $trimmed;
+    }
+
+    private function detectMiner(string $blockHash): ?string
+    {
+        $transactions = $this->fetchBlockTransactionsPageRaw($blockHash, 0);
+        $coinbaseTx = $transactions[0] ?? null;
+
+        if (! is_array($coinbaseTx)) {
+            return null;
+        }
+
+        return $this->detectMinerFromCoinbaseTransaction($coinbaseTx);
+    }
+
+    /**
+     * @param  array<string, mixed>  $coinbaseTx
+     */
+    private function detectMinerFromCoinbaseTransaction(array $coinbaseTx): ?string
+    {
+        $vin = $coinbaseTx['vin'] ?? [];
+
+        if (is_array($vin) && isset($vin[0]) && is_array($vin[0])) {
+            $tag = $this->extractCoinbaseTag($vin[0]['scriptsig'] ?? null);
+
+            if ($tag !== null) {
+                return $tag;
+            }
+        }
+
+        $vout = $coinbaseTx['vout'] ?? [];
+
+        if (is_array($vout)) {
+            foreach ($vout as $output) {
+                if (! is_array($output)) {
+                    continue;
+                }
+
+                $address = $output['scriptpubkey_address'] ?? null;
+
+                if (is_string($address) && $address !== '') {
+                    return $address;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{miner: ?string, block_reward: int, total_fees: int}
+     */
+    private function fetchBlockEconomics(string $blockHash, int $height): array
+    {
+        $transactions = $this->fetchBlockTransactionsPageRaw($blockHash, 0);
+        $coinbaseTx = $transactions[0] ?? null;
+
+        if (! is_array($coinbaseTx)) {
+            return [
+                'miner' => null,
+                'block_reward' => 0,
+                'total_fees' => 0,
+            ];
+        }
+
+        $miner = $this->detectMinerFromCoinbaseTransaction($coinbaseTx);
+        $blockReward = $this->coinbaseOutputTotal($coinbaseTx);
+        $subsidy = $this->blockSubsidySats($height);
+        $totalFees = max(0, $blockReward - $subsidy);
+
+        return [
+            'miner' => $miner,
+            'block_reward' => $blockReward,
+            'total_fees' => $totalFees,
+        ];
+    }
+
+    private function blockSubsidySats(int $height): int
+    {
+        if ($height < 0) {
+            return 0;
+        }
+
+        $halvings = intdiv($height, 210000);
+
+        if ($halvings >= 64) {
+            return 0;
+        }
+
+        return intdiv(5_000_000_000, 2 ** $halvings);
+    }
+
+    /**
+     * @param  array<string, mixed>  $coinbaseTx
+     */
+    private function coinbaseOutputTotal(array $coinbaseTx): int
+    {
+        $vout = $coinbaseTx['vout'] ?? [];
+
+        if (! is_array($vout)) {
+            return 0;
+        }
+
+        $total = 0;
+
+        foreach ($vout as $output) {
+            if (! is_array($output)) {
+                continue;
+            }
+
+            $total += (int) ($output['value'] ?? 0);
+        }
+
+        return $total;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    private function fetchBlockTransactionsPageRaw(string $blockHash, int $transactionsStart): array
+    {
+        if ($blockHash === '') {
+            return [];
+        }
+
+        $start = $this->normalizeTransactionsStart($transactionsStart);
+        $endpoint = $start === 0
+            ? "/block/{$blockHash}/txs"
+            : "/block/{$blockHash}/txs/{$start}";
+
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get($endpoint);
+
+        if (! $response->successful()) {
+            return [];
+        }
+
+        $transactions = $response->json();
+
+        if (! is_array($transactions)) {
+            return [];
+        }
+
+        return $transactions;
+    }
+
+    private function extractCoinbaseTag(mixed $scriptSig): ?string
+    {
+        if (! is_string($scriptSig) || $scriptSig === '') {
+            return null;
+        }
+
+        $decoded = @hex2bin($scriptSig);
+
+        if (! is_string($decoded) || $decoded === '') {
+            return null;
+        }
+
+        if (preg_match('/\/([A-Za-z0-9 .:_-]{2,64})\//', $decoded, $matches) === 1) {
+            $tag = $this->sanitizeMinerText($matches[1]);
+
+            if ($tag !== null) {
+                return $tag;
+            }
+        }
+
+        if (preg_match_all('/[A-Za-z0-9 .:_-]{4,}/', $decoded, $matches) > 0) {
+            foreach ($matches[0] as $candidate) {
+                $trimmed = $this->sanitizeMinerText($candidate);
+
+                if ($trimmed !== null) {
+                    return $trimmed;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private function sanitizeMinerText(string $value): ?string
+    {
+        $trimmed = trim($value);
+
+        if ($trimmed === '') {
+            return null;
+        }
+
+        if (preg_match('//u', $trimmed) !== 1) {
+            return null;
+        }
+
+        $clean = preg_replace('/[^\x20-\x7E]/u', '', $trimmed);
+
+        if (! is_string($clean)) {
+            return null;
+        }
+
+        $clean = trim($clean);
+
+        return $clean === '' ? null : $clean;
     }
 
     private function normalizeTransactionsStart(int $transactionsStart): int

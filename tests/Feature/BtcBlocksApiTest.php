@@ -28,6 +28,9 @@ class BtcBlocksApiTest extends TestCase
             ->assertOk()
             ->assertJsonCount(10, 'data.blocks')
             ->assertJsonPath('data.blocks.0.hash', 'block-hash-1')
+            ->assertJsonPath('data.blocks.0.miner', 'FakePool')
+            ->assertJsonPath('data.blocks.0.block_reward', 5000000000)
+            ->assertJsonPath('data.blocks.0.total_fees', 4687500000)
             ->assertJsonPath('data.blocks.0.total_transactions', 3001)
             ->assertJsonPath('data.blocks.0.transactions.0', 'txid-1')
             ->assertJsonStructure([
@@ -37,6 +40,9 @@ class BtcBlocksApiTest extends TestCase
                             'hash',
                             'weight',
                             'height',
+                            'miner',
+                            'block_reward',
+                            'total_fees',
                             'total_transactions',
                             'transactions',
                             'timestamp',
@@ -100,9 +106,9 @@ class BtcBlocksApiTest extends TestCase
         $this->getJson('/api/v1/btc/blocks?limit=1')->assertOk();
         $this->getJson('/api/v1/btc/blocks?limit=1')->assertOk();
 
-        // First request makes two upstream calls (/blocks + /block/:hash/txs).
+        // First request makes three upstream calls (/blocks + /block/:hash/txs for tx list + economics).
         // Second request is served from cache.
-        Http::assertSentCount(2);
+        Http::assertSentCount(3);
     }
 
     public function test_it_returns_block_details_with_navigation_hashes(): void
@@ -123,6 +129,9 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonPath('data.block.hash', 'block-hash-1')
             ->assertJsonPath('data.block.previous_block_hash', 'prev-hash')
             ->assertJsonPath('data.block.next_block_hash', 'next-hash')
+            ->assertJsonPath('data.block.miner', 'FakePool')
+            ->assertJsonPath('data.block.block_reward', 5000000000)
+            ->assertJsonPath('data.block.total_fees', 4687500000)
             ->assertJsonPath('data.block.total_transactions', 3200)
             ->assertJsonPath('data.block.transactions.0.is_coinbase', true)
             ->assertJsonPath('data.block.transactions.0.output_total', 5000000000)
@@ -138,6 +147,7 @@ class BtcBlocksApiTest extends TestCase
                 $this->fakeBlockDetail('block-hash-1', 900_000, 'prev-hash'),
                 200
             ),
+            'https://blockstream.info/api/block/block-hash-1/txs' => Http::response($this->fakeTransactions(25), 200),
             'https://blockstream.info/api/block/block-hash-1/txs/25' => Http::response($this->fakeTransactions(25, 26), 200),
             'https://blockstream.info/api/block-height/900001' => Http::response('next-hash', 200),
         ]);
@@ -227,6 +237,7 @@ class BtcBlocksApiTest extends TestCase
                     ? [
                         [
                             'is_coinbase' => true,
+                            'scriptsig' => '2f46616b65506f6f6c2f',
                         ],
                     ]
                     : [

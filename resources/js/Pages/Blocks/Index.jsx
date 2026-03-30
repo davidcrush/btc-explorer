@@ -19,6 +19,12 @@ export default function Index() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
 
+    const formatBtc = (value) =>
+        `${new Intl.NumberFormat(undefined, {
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 8,
+        }).format(Number(value || 0) / 100000000)} btc`;
+
     const fetchBlocks = useCallback(async () => {
         setLoading(true);
         setError(null);
@@ -96,6 +102,15 @@ export default function Index() {
                                         </Code>
 
                                         <HStack wrap="wrap" gap={4}>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Miner: {block.miner ?? 'Unknown'}
+                                            </Text>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Reward: {formatBtc(block.block_reward)}
+                                            </Text>
+                                            <Text fontSize="sm" color="gray.300">
+                                                Fees: {formatBtc(block.total_fees)}
+                                            </Text>
                                             <Text fontSize="sm" color="gray.300">
                                                 Size: {block.size}
                                             </Text>
