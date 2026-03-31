@@ -126,49 +126,77 @@ class BlockstreamApiClient
      *     merkle_root: string
      * }>
      */
+    /**
+     * Esplora returns at most 10 blocks per `GET /blocks` or `GET /blocks/:start_height`.
+     * Larger limits are satisfied by paging using the previous page's lowest height minus one.
+     *
+     * @return list<array<string, mixed>>
+     */
     private function fetchLatestBlocksPayload(int $safeLimit): array
     {
-
-        $blocksResponse = Http::baseUrl($this->baseUrl())
-            ->timeout($this->timeout())
-            ->acceptJson()
-            ->get('/blocks');
-
-        if (! $blocksResponse->successful()) {
-            throw new RuntimeException('Unable to fetch latest blocks from Blockstream.');
-        }
-
-        $blocks = $blocksResponse->json();
-
-        if (! is_array($blocks)) {
-            throw new RuntimeException('Unexpected Blockstream blocks response format.');
-        }
-
         $mapped = [];
+        $nextStartHeight = null;
 
-        foreach (array_slice($blocks, 0, $safeLimit) as $block) {
-            if (! is_array($block) || ! isset($block['id']) || ! is_string($block['id'])) {
-                continue;
+        while (count($mapped) < $safeLimit) {
+            $path = $nextStartHeight === null ? '/blocks' : '/blocks/'.$nextStartHeight;
+
+            $blocksResponse = Http::baseUrl($this->baseUrl())
+                ->timeout($this->timeout())
+                ->acceptJson()
+                ->get($path);
+
+            if (! $blocksResponse->successful()) {
+                throw new RuntimeException('Unable to fetch latest blocks from Blockstream.');
             }
 
-            $height = (int) ($block['height'] ?? 0);
-            $economics = $this->fetchBlockEconomics((string) $block['id'], $height);
+            $blocks = $blocksResponse->json();
 
-            $mapped[] = [
-                'hash' => (string) $block['id'],
-                'weight' => (int) ($block['weight'] ?? 0),
-                'height' => $height,
-                'miner' => $economics['miner'],
-                'block_reward' => $economics['block_reward'],
-                'total_fees' => $economics['total_fees'],
-                'total_transactions' => (int) ($block['tx_count'] ?? 0),
-                'transactions' => $this->fetchTransactionIdsPage((string) $block['id'], 0, self::TRANSACTION_PAGE_SIZE),
-                'timestamp' => (int) ($block['timestamp'] ?? 0),
-                'size' => (int) ($block['size'] ?? 0),
-                'difficulty' => (string) ($block['difficulty'] ?? '0'),
-                'nonce' => (int) ($block['nonce'] ?? 0),
-                'merkle_root' => (string) ($block['merkle_root'] ?? ''),
-            ];
+            if (! is_array($blocks) || $blocks === []) {
+                break;
+            }
+
+            $page = array_slice($blocks, 0, 10);
+
+            foreach ($page as $block) {
+                if (! is_array($block) || ! isset($block['id']) || ! is_string($block['id'])) {
+                    continue;
+                }
+
+                $height = (int) ($block['height'] ?? 0);
+                $economics = $this->fetchBlockEconomics((string) $block['id'], $height);
+
+                $mapped[] = [
+                    'hash' => (string) $block['id'],
+                    'weight' => (int) ($block['weight'] ?? 0),
+                    'height' => $height,
+                    'miner' => $economics['miner'],
+                    'block_reward' => $economics['block_reward'],
+                    'total_fees' => $economics['total_fees'],
+                    'total_transactions' => (int) ($block['tx_count'] ?? 0),
+                    'transactions' => $this->fetchTransactionIdsPage((string) $block['id'], 0, self::TRANSACTION_PAGE_SIZE),
+                    'timestamp' => (int) ($block['timestamp'] ?? 0),
+                    'size' => (int) ($block['size'] ?? 0),
+                    'difficulty' => (string) ($block['difficulty'] ?? '0'),
+                    'nonce' => (int) ($block['nonce'] ?? 0),
+                    'merkle_root' => (string) ($block['merkle_root'] ?? ''),
+                ];
+
+                if (count($mapped) >= $safeLimit) {
+                    break 2;
+                }
+            }
+
+            if (count($page) < 10) {
+                break;
+            }
+
+            $heights = array_map(static fn (array $b): int => (int) ($b['height'] ?? 0), $page);
+            $minHeight = min($heights);
+            $nextStartHeight = $minHeight - 1;
+
+            if ($nextStartHeight < 0) {
+                break;
+            }
         }
 
         return $mapped;
@@ -427,7 +455,7 @@ class BlockstreamApiClient
 
     private function latestBlocksCacheKey(int $limit): string
     {
-        return "btc:blockstream:v4:latest-blocks:limit:{$limit}";
+        return "btc:blockstream:v5:latest-blocks:limit:{$limit}";
     }
 
     private function blockDetailsCacheKey(string $hash, int $transactionsStart, int $transactionsLimit): string

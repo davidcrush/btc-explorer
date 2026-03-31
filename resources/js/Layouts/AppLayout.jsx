@@ -11,13 +11,17 @@ import {
     Text,
 } from '@chakra-ui/react';
 import { useEffect, useMemo, useState } from 'react';
-import { useUserPreferences } from '../contexts/UserPreferencesContext';
+import {
+    BLOCKS_PER_PAGE_OPTIONS,
+    useUserPreferences,
+} from '../contexts/UserPreferencesContext';
 
 export default function AppLayout({ title, subtitle, children }) {
     const { url } = usePage();
     const [colorMode, setColorMode] = useState('dark');
     const [showProfile, setShowProfile] = useState(false);
-    const { amountUnit, setAmountUnit } = useUserPreferences();
+    const { amountUnit, setAmountUnit, blocksPerPage, setBlocksPerPage } =
+        useUserPreferences();
 
     useEffect(() => {
         const saved = window.localStorage.getItem('color-mode');
@@ -157,7 +161,7 @@ export default function AppLayout({ title, subtitle, children }) {
                                         position="absolute"
                                         top="calc(100% + 8px)"
                                         right={0}
-                                        minW="220px"
+                                        minW="240px"
                                         borderWidth="1px"
                                         borderColor={palette.panelBorder}
                                         rounded="md"
@@ -202,6 +206,25 @@ export default function AppLayout({ title, subtitle, children }) {
                                             >
                                                 sat
                                             </Button>
+                                        </HStack>
+
+                                        <Text fontSize="sm" fontWeight="medium" mt={4} mb={2}>
+                                            Blocks per page
+                                        </Text>
+                                        <HStack wrap="wrap">
+                                            {BLOCKS_PER_PAGE_OPTIONS.map((n) => (
+                                                <Button
+                                                    key={n}
+                                                    size="xs"
+                                                    variant={
+                                                        blocksPerPage === n ? 'solid' : 'outline'
+                                                    }
+                                                    colorPalette="orange"
+                                                    onClick={() => setBlocksPerPage(n)}
+                                                >
+                                                    {n}
+                                                </Button>
+                                            ))}
                                         </HStack>
                                     </Box>
                                 )}

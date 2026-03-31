@@ -20,8 +20,6 @@ import AppLayout from '../../Layouts/AppLayout';
 import { useUserPreferences } from '../../contexts/UserPreferencesContext';
 import { formatBlockFullDateTime, formatBlockRelativeTime } from '../../utils/blockTimestamp';
 
-const BLOCK_LIST_LIMIT = 10;
-
 function BlockCardSkeleton() {
     return (
         <Box borderWidth="1px" borderColor="gray.700" rounded="lg" p={4} bg="gray.900">
@@ -47,7 +45,7 @@ export default function Index() {
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [relativeTimeTick, setRelativeTimeTick] = useState(0);
-    const { formatAmount } = useUserPreferences();
+    const { formatAmount, blocksPerPage } = useUserPreferences();
 
     useEffect(() => {
         const id = window.setInterval(() => {
@@ -63,7 +61,7 @@ export default function Index() {
 
         try {
             const response = await axios.get(
-                `/api/v1/btc/blocks?limit=${BLOCK_LIST_LIMIT}`
+                `/api/v1/btc/blocks?limit=${blocksPerPage}`
             );
             setBlocks(response?.data?.data?.blocks ?? []);
         } catch {
@@ -72,7 +70,7 @@ export default function Index() {
         } finally {
             setLoading(false);
         }
-    }, []);
+    }, [blocksPerPage]);
 
     useEffect(() => {
         fetchBlocks();
@@ -95,7 +93,7 @@ export default function Index() {
 
                     {loading && (
                         <Stack gap={4}>
-                            {Array.from({ length: BLOCK_LIST_LIMIT }, (_, index) => (
+                            {Array.from({ length: blocksPerPage }, (_, index) => (
                                 <BlockCardSkeleton key={`block-skeleton-${index}`} />
                             ))}
                         </Stack>

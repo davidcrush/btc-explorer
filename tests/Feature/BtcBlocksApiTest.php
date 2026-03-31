@@ -80,6 +80,41 @@ class BtcBlocksApiTest extends TestCase
         ]);
     }
 
+    public function test_it_pages_upstream_blocks_when_limit_exceeds_ten(): void
+    {
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $url = $request->url();
+
+            if (str_ends_with(parse_url($url, PHP_URL_PATH) ?? '', '/blocks')) {
+                return Http::response($this->fakeBlocksAtHeights(900_010, 10), 200);
+            }
+
+            if (str_ends_with($url, '/blocks/900000')) {
+                return Http::response($this->fakeBlocksAtHeights(900_000, 10), 200);
+            }
+
+            if (str_ends_with($url, '/blocks/899990')) {
+                return Http::response($this->fakeBlocksAtHeights(899_990, 5), 200);
+            }
+
+            if (str_contains($url, '/txs')) {
+                return Http::response($this->fakeTransactions(2), 200);
+            }
+
+            return Http::response('', 404);
+        });
+
+        $response = $this->getJson('/api/v1/btc/blocks?limit=25');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(25, 'data.blocks')
+            ->assertJsonPath('data.blocks.0.height', 900_010)
+            ->assertJsonPath('data.blocks.9.height', 900_001)
+            ->assertJsonPath('data.blocks.10.height', 900_000)
+            ->assertJsonPath('data.blocks.24.height', 899_986);
+    }
+
     public function test_it_limits_each_block_transactions_to_twenty_five(): void
     {
         Http::fake([
@@ -210,6 +245,31 @@ class BtcBlocksApiTest extends TestCase
                 'difficulty' => '89762456972366.31255187',
                 'nonce' => 1_234_567 + $i,
                 'merkle_root' => "merkle-root-{$i}",
+            ];
+        }
+
+        return $blocks;
+    }
+
+    /**
+     * @return list<array<string, int|string>>
+     */
+    private function fakeBlocksAtHeights(int $highestHeight, int $count): array
+    {
+        $blocks = [];
+
+        for ($i = 0; $i < $count; $i++) {
+            $height = $highestHeight - $i;
+            $blocks[] = [
+                'id' => "block-hash-{$height}",
+                'weight' => 3_990_000 + $height,
+                'height' => $height,
+                'tx_count' => 3_000 + ($height % 1000),
+                'timestamp' => 1_700_000_000 + $height,
+                'size' => 1_500_000 + $height,
+                'difficulty' => '89762456972366.31255187',
+                'nonce' => 1_234_567 + $height,
+                'merkle_root' => "merkle-root-{$height}",
             ];
         }
 

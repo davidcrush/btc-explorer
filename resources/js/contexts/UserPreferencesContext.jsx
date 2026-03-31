@@ -2,8 +2,25 @@ import { createContext, useContext, useEffect, useMemo, useState } from 'react';
 
 const UserPreferencesContext = createContext(null);
 
+export const BLOCKS_PER_PAGE_OPTIONS = [10, 25, 50, 100];
+
+const BLOCKS_PER_PAGE_STORAGE_KEY = 'blocks-per-page';
+const DEFAULT_BLOCKS_PER_PAGE = 10;
+
+function readBlocksPerPageFromStorage() {
+    if (typeof window === 'undefined') {
+        return DEFAULT_BLOCKS_PER_PAGE;
+    }
+
+    const raw = window.localStorage.getItem(BLOCKS_PER_PAGE_STORAGE_KEY);
+    const parsed = parseInt(raw, 10);
+
+    return BLOCKS_PER_PAGE_OPTIONS.includes(parsed) ? parsed : DEFAULT_BLOCKS_PER_PAGE;
+}
+
 export function UserPreferencesProvider({ children }) {
     const [amountUnit, setAmountUnit] = useState('bitcoin');
+    const [blocksPerPage, setBlocksPerPage] = useState(readBlocksPerPageFromStorage);
 
     useEffect(() => {
         const storedUnit = window.localStorage.getItem('amount-unit');
@@ -21,6 +38,10 @@ export function UserPreferencesProvider({ children }) {
     useEffect(() => {
         window.localStorage.setItem('amount-unit', amountUnit);
     }, [amountUnit]);
+
+    useEffect(() => {
+        window.localStorage.setItem(BLOCKS_PER_PAGE_STORAGE_KEY, String(blocksPerPage));
+    }, [blocksPerPage]);
 
     const formatAmount = useMemo(
         () => (value) => {
@@ -57,8 +78,10 @@ export function UserPreferencesProvider({ children }) {
             amountUnit,
             setAmountUnit,
             formatAmount,
+            blocksPerPage,
+            setBlocksPerPage,
         }),
-        [amountUnit, formatAmount]
+        [amountUnit, blocksPerPage, formatAmount]
     );
 
     return (
