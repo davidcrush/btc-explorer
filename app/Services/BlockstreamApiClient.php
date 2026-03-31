@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\DataTransferObjects\BtcBlockData;
 use App\DataTransferObjects\BtcBlockDetailData;
+use App\DataTransferObjects\BtcTransactionDetailData;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -81,9 +82,78 @@ class BlockstreamApiClient
         return $this->hydrateBlockDetail($payload);
     }
 
-    /**
-     * @param  mixed  $payload
-     */
+    public function transactionDetails(string $txid): ?BtcTransactionDetailData
+    {
+        $normalized = $this->normalizeTxid($txid);
+        if ($normalized === null) {
+            return null;
+        }
+
+        $store = Cache::store($this->cacheStore());
+        $key = $this->transactionDetailsCacheKey($normalized);
+
+        try {
+            $cached = $store->get($key);
+            if (is_array($cached) && ($cached['txid'] ?? '') !== '') {
+                return $this->hydrateTransactionDetail($cached);
+            }
+        } catch (Throwable) {
+            // Ignore cache read failures.
+        }
+
+        $payload = $this->fetchTransactionDetailPayload($normalized);
+
+        if ($payload === null) {
+            return null;
+        }
+
+        try {
+            $store->put(
+                $key,
+                $payload,
+                now()->addSeconds($this->transactionDetailTtlByPayload($payload)),
+            );
+        } catch (Throwable) {
+            // Ignore cache write failures.
+        }
+
+        return $this->hydrateTransactionDetail($payload);
+    }
+
+    private function hydrateTransactionDetail(mixed $payload): ?BtcTransactionDetailData
+    {
+        if (! is_array($payload) || ($payload['txid'] ?? '') === '') {
+            return null;
+        }
+
+        return new BtcTransactionDetailData(
+            txid: (string) $payload['txid'],
+            confirmed: (bool) ($payload['confirmed'] ?? false),
+            blockHash: $this->nullableString($payload['block_hash'] ?? null),
+            blockHeight: isset($payload['block_height']) ? (int) $payload['block_height'] : null,
+            fee: (int) ($payload['fee'] ?? 0),
+            size: (int) ($payload['size'] ?? 0),
+            weight: (int) ($payload['weight'] ?? 0),
+            virtualSize: (int) ($payload['virtual_size'] ?? 0),
+            isCoinbase: (bool) ($payload['is_coinbase'] ?? false),
+            inputTotal: (int) ($payload['input_total'] ?? 0),
+            outputTotal: (int) ($payload['output_total'] ?? 0),
+            inputs: is_array($payload['inputs'] ?? null) ? $payload['inputs'] : [],
+            outputs: is_array($payload['outputs'] ?? null) ? $payload['outputs'] : [],
+        );
+    }
+
+    private function normalizeTxid(string $txid): ?string
+    {
+        $normalized = strtolower(trim($txid));
+
+        if (preg_match('/^[a-f0-9]{64}$/', $normalized) !== 1) {
+            return null;
+        }
+
+        return $normalized;
+    }
+
     private function hydrateBlockDetail(mixed $payload): ?BtcBlockDetailData
     {
         if (! is_array($payload)) {
@@ -330,7 +400,6 @@ class BlockstreamApiClient
     }
 
     /**
-     * @param  mixed  $cachedBlocks
      * @return list<BtcBlockData>
      */
     private function hydrateBlocks(mixed $cachedBlocks): array
@@ -522,6 +591,21 @@ class BlockstreamApiClient
         return (int) config('services.blockstream.block_detail_stable_ttl', 86400);
     }
 
+    private function transactionDetailsCacheKey(string $txid): string
+    {
+        return "btc:blockstream:v1:tx-detail:{$txid}";
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function transactionDetailTtlByPayload(array $payload): int
+    {
+        return ($payload['confirmed'] ?? false) === true
+            ? $this->blockDetailStableTtl()
+            : $this->blockDetailHotTtl();
+    }
+
     private function nextBlockHash(int $height): ?string
     {
         $response = Http::baseUrl($this->baseUrl())
@@ -694,6 +778,90 @@ class BlockstreamApiClient
         return $transactions;
     }
 
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function fetchTransactionDetailPayload(string $txid): ?array
+    {
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get('/tx/'.$txid);
+
+        if ($response->status() === 404) {
+            return null;
+        }
+
+        if (! $response->successful()) {
+            throw new RuntimeException(sprintf(
+                'Blockstream transaction request failed with HTTP %d.',
+                $response->status()
+            ));
+        }
+
+        $tx = $response->json();
+
+        if (! is_array($tx)) {
+            throw new RuntimeException('Unexpected Blockstream transaction response format.');
+        }
+
+        return $this->buildTransactionDetailArray($tx);
+    }
+
+    /**
+     * @param  array<string, mixed>  $tx
+     * @return array<string, mixed>
+     */
+    private function buildTransactionDetailArray(array $tx): array
+    {
+        $txid = strtolower((string) ($tx['txid'] ?? ''));
+        $inputs = $this->mapInputs($tx['vin'] ?? []);
+        $outputs = $this->mapOutputs($tx['vout'] ?? []);
+        $isCoinbase = $this->isCoinbaseTx($inputs);
+
+        $inputTotal = 0;
+        foreach ($inputs as $input) {
+            $inputTotal += $input['value'];
+        }
+
+        $outputTotal = 0;
+        foreach ($outputs as $output) {
+            $outputTotal += $output['value'];
+        }
+
+        $size = (int) ($tx['size'] ?? 0);
+        $weight = (int) ($tx['weight'] ?? 0);
+        $virtualSize = $weight > 0 ? intdiv($weight + 3, 4) : $size;
+
+        $status = $tx['status'] ?? [];
+        $confirmed = is_array($status) && (($status['confirmed'] ?? false) === true);
+        $blockHash = null;
+        $blockHeight = null;
+
+        if (is_array($status)) {
+            $blockHash = $this->nullableString($status['block_hash'] ?? null);
+            if (isset($status['block_height'])) {
+                $blockHeight = (int) $status['block_height'];
+            }
+        }
+
+        return [
+            'txid' => $txid,
+            'confirmed' => $confirmed,
+            'block_hash' => $blockHash,
+            'block_height' => $blockHeight,
+            'fee' => (int) ($tx['fee'] ?? 0),
+            'size' => $size,
+            'weight' => $weight,
+            'virtual_size' => $virtualSize,
+            'is_coinbase' => $isCoinbase,
+            'input_total' => $isCoinbase ? 0 : $inputTotal,
+            'output_total' => $outputTotal,
+            'inputs' => $inputs,
+            'outputs' => $outputs,
+        ];
+    }
+
     private function extractCoinbaseTag(mixed $scriptSig): ?string
     {
         if (! is_string($scriptSig) || $scriptSig === '') {
@@ -769,7 +937,6 @@ class BlockstreamApiClient
     }
 
     /**
-     * @param  mixed  $vin
      * @return list<array{txid: ?string, vout: ?int, address: ?string, value: int, is_coinbase: bool}>
      */
     private function mapInputs(mixed $vin): array
@@ -808,7 +975,6 @@ class BlockstreamApiClient
     }
 
     /**
-     * @param  mixed  $vout
      * @return list<array{address: ?string, value: int}>
      */
     private function mapOutputs(mixed $vout): array

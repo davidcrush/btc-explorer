@@ -171,46 +171,59 @@ export default function Show({ hash }) {
                                     Transactions ({transactions.length} of {block.total_transactions})
                                 </Text>
                                 <Stack gap={2}>
-                                    {transactions.map((txid) => (
+                                    {transactions.map((tx) => (
                                         <Box
-                                            key={txid.txid}
+                                            key={tx.txid}
                                             borderWidth="1px"
                                             borderColor="gray.700"
                                             rounded="md"
                                             p={3}
                                             bg="gray.950"
+                                            cursor="pointer"
+                                            transition="border-color 0.15s ease, background 0.15s ease"
+                                            _hover={{ borderColor: 'orange.400', bg: 'gray.900' }}
+                                            onClick={() => router.visit(`/transactions/${tx.txid}`)}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter' || e.key === ' ') {
+                                                    e.preventDefault();
+                                                    router.visit(`/transactions/${tx.txid}`);
+                                                }
+                                            }}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-label={`View transaction ${tx.txid}`}
                                         >
                                             <HStack mb={2} wrap="wrap">
-                                                {txid.is_coinbase && (
+                                                {tx.is_coinbase && (
                                                     <Badge colorPalette="orange">Coinbase</Badge>
                                                 )}
                                                 <Code colorPalette="gray" whiteSpace="normal" wordBreak="break-all">
-                                                    {txid.txid}
+                                                    {tx.txid}
                                                 </Code>
                                             </HStack>
                                             <HStack wrap="wrap" gap={4} mb={2}>
                                                 <Text fontSize="sm" color="gray.300">
-                                                    Inputs total: {formatAmount(txid.input_total)}
+                                                    Inputs total: {formatAmount(tx.input_total)}
                                                 </Text>
                                                 <Text fontSize="sm" color="gray.300">
-                                                    Outputs total: {formatAmount(txid.output_total)}
+                                                    Outputs total: {formatAmount(tx.output_total)}
                                                 </Text>
                                                 <Text fontSize="sm" color="gray.300">
-                                                    Fee: {formatAmount(txid.fee)}
+                                                    Fee: {formatAmount(tx.fee)}
                                                 </Text>
                                             </HStack>
                                             <Text fontSize="sm" color="gray.200" mb={1}>
                                                 Inputs
                                             </Text>
                                             <Stack gap={1} mb={2}>
-                                                {txid.inputs.map((input, index) => (
-                                                    <Text key={`${txid.txid}-in-${index}`} fontSize="xs" color="gray.400">
+                                                {tx.inputs.map((input, index) => (
+                                                    <Text key={`${tx.txid}-in-${index}`} fontSize="xs" color="gray.400">
                                                         {input.is_coinbase
                                                             ? 'Coinbase input'
                                                             : `${input.address ?? 'Unknown address'} - ${formatAmount(input.value)}`}
                                                     </Text>
                                                 ))}
-                                                {txid.inputs.length === 0 && (
+                                                {tx.inputs.length === 0 && (
                                                     <Text fontSize="xs" color="gray.500">No inputs</Text>
                                                 )}
                                             </Stack>
@@ -218,12 +231,12 @@ export default function Show({ hash }) {
                                                 Outputs
                                             </Text>
                                             <Stack gap={1}>
-                                                {txid.outputs.map((output, index) => (
-                                                    <Text key={`${txid.txid}-out-${index}`} fontSize="xs" color="gray.400">
+                                                {tx.outputs.map((output, index) => (
+                                                    <Text key={`${tx.txid}-out-${index}`} fontSize="xs" color="gray.400">
                                                         {(output.address ?? 'Unknown address')} - {formatAmount(output.value)}
                                                     </Text>
                                                 ))}
-                                                {txid.outputs.length === 0 && (
+                                                {tx.outputs.length === 0 && (
                                                     <Text fontSize="xs" color="gray.500">No outputs</Text>
                                                 )}
                                             </Stack>
