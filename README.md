@@ -102,7 +102,7 @@ Adjust `.env` for Sail (database, `REDIS_HOST`, etc.) per [Laravel Sail document
 | `BLOCKSTREAM_API_BASE_URL` | Esplora base URL | `https://blockstream.info/api` |
 | `BLOCKSTREAM_API_TIMEOUT` | HTTP timeout (seconds) | `10` |
 | `BLOCKSTREAM_CACHE_STORE` | Laravel cache store name for upstream data | `redis` |
-| `BLOCKSTREAM_CACHE_TTL` | Latest-blocks list cache TTL (seconds) | `30` |
+| `BLOCKSTREAM_CACHE_TTL` | Latest-blocks list cache TTL (seconds) | `90` |
 | `BLOCKSTREAM_BLOCK_DETAIL_HOT_TTL` | Detail TTL when tip / no next block (seconds) | `30` |
 | `BLOCKSTREAM_BLOCK_DETAIL_STABLE_TTL` | Detail TTL when `next_block_hash` exists (seconds) | `86400` |
 

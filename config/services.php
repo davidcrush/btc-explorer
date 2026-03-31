@@ -39,7 +39,7 @@ return [
         'base_url' => env('BLOCKSTREAM_API_BASE_URL', 'https://blockstream.info/api'),
         'timeout' => (int) env('BLOCKSTREAM_API_TIMEOUT', 10),
         'cache_store' => env('BLOCKSTREAM_CACHE_STORE', 'redis'),
-        'cache_ttl' => (int) env('BLOCKSTREAM_CACHE_TTL', 30),
+        'cache_ttl' => (int) env('BLOCKSTREAM_CACHE_TTL', 90),
         'block_detail_hot_ttl' => (int) env('BLOCKSTREAM_BLOCK_DETAIL_HOT_TTL', 30),
         'block_detail_stable_ttl' => (int) env('BLOCKSTREAM_BLOCK_DETAIL_STABLE_TTL', 86400),
     ],

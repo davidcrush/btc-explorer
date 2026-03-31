@@ -18,8 +18,8 @@ class BlockstreamApiClient
      */
     public function latestBlocks(int $limit = 10, int $offset = 0): array
     {
-        $safeLimit = max(1, min($limit, 100));
-        $safeOffset = max(0, min($offset, 2000));
+        $safeLimit = max(1, min($limit, 50));
+        $safeOffset = max(0, min($offset, 500));
         $store = Cache::store($this->cacheStore());
         $key = $this->latestBlocksCacheKey($safeLimit, $safeOffset);
         $ttl = now()->addSeconds($this->cacheTtl());
@@ -489,7 +489,7 @@ class BlockstreamApiClient
 
     private function cacheTtl(): int
     {
-        return (int) config('services.blockstream.cache_ttl', 30);
+        return (int) config('services.blockstream.cache_ttl', 90);
     }
 
     private function latestBlocksCacheKey(int $limit, int $offset = 0): string
