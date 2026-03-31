@@ -180,7 +180,7 @@ export default function AppLayout({ title, subtitle, children }) {
                                                 colorPalette="orange"
                                                 onClick={() => setAmountUnit('bitcoin')}
                                             >
-                                                btc
+                                                ₿
                                             </Button>
                                             <Button
                                                 size="xs"
