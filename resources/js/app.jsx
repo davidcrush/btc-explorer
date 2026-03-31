@@ -7,7 +7,7 @@ import { resolvePageComponent } from 'laravel-vite-plugin/inertia-helpers';
 import { createRoot } from 'react-dom/client';
 import { UserPreferencesProvider } from './contexts/UserPreferencesContext';
 
-const appName = import.meta.env.VITE_APP_NAME || 'BTC Explorer';
+const appName = import.meta.env.VITE_APP_NAME || 'btc-explorer';
 
 createInertiaApp({
     title: (title) => (title ? `${title} - ${appName}` : appName),
