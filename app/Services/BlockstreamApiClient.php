@@ -16,22 +16,35 @@ class BlockstreamApiClient
     /**
      * @return list<BtcBlockData>
      */
-    public function latestBlocks(int $limit = 10): array
+    public function latestBlocks(int $limit = 10, int $offset = 0): array
     {
         $safeLimit = max(1, min($limit, 100));
+        $safeOffset = max(0, min($offset, 2000));
+        $store = Cache::store($this->cacheStore());
+        $key = $this->latestBlocksCacheKey($safeLimit, $safeOffset);
+        $ttl = now()->addSeconds($this->cacheTtl());
 
         try {
-            $cachedBlocks = Cache::store($this->cacheStore())->remember(
-                $this->latestBlocksCacheKey($safeLimit),
-                now()->addSeconds($this->cacheTtl()),
-                fn (): array => $this->fetchLatestBlocksPayload($safeLimit),
-            );
+            $cached = $store->get($key);
+
+            if (is_array($cached) && $cached !== []) {
+                return $this->hydrateBlocks($cached);
+            }
         } catch (Throwable) {
-            // If cache is unavailable, still serve data directly from upstream.
-            $cachedBlocks = $this->fetchLatestBlocksPayload($safeLimit);
+            // Ignore cache read errors and fetch from upstream.
         }
 
-        return $this->hydrateBlocks($cachedBlocks);
+        $payload = $this->fetchLatestBlocksPayload($safeLimit, $safeOffset);
+
+        if ($payload !== []) {
+            try {
+                $store->put($key, $payload, $ttl);
+            } catch (Throwable) {
+                // Ignore cache write errors.
+            }
+        }
+
+        return $this->hydrateBlocks($payload);
     }
 
     public function blockDetails(string $hash, int $transactionsStart = 0, int $transactionsLimit = self::TRANSACTION_PAGE_SIZE): ?BtcBlockDetailData
@@ -110,32 +123,17 @@ class BlockstreamApiClient
     }
 
     /**
-     * @return list<array{
-     *     hash: string,
-     *     weight: int,
-     *     height: int,
-     *     miner: ?string,
-     *     block_reward: int,
-     *     total_fees: int,
-     *     total_transactions: int,
-     *     transactions: list<string>,
-     *     timestamp: int,
-     *     size: int,
-     *     difficulty: string,
-     *     nonce: int,
-     *     merkle_root: string
-     * }>
-     */
-    /**
      * Esplora returns at most 10 blocks per `GET /blocks` or `GET /blocks/:start_height`.
      * Larger limits are satisfied by paging using the previous page's lowest height minus one.
+     * `$safeOffset` skips that many blocks from the chain tip before collecting.
      *
      * @return list<array<string, mixed>>
      */
-    private function fetchLatestBlocksPayload(int $safeLimit): array
+    private function fetchLatestBlocksPayload(int $safeLimit, int $safeOffset = 0): array
     {
         $mapped = [];
         $nextStartHeight = null;
+        $skipRemaining = $safeOffset;
 
         while (count($mapped) < $safeLimit) {
             $path = $nextStartHeight === null ? '/blocks' : '/blocks/'.$nextStartHeight;
@@ -146,34 +144,64 @@ class BlockstreamApiClient
                 ->get($path);
 
             if (! $blocksResponse->successful()) {
-                throw new RuntimeException('Unable to fetch latest blocks from Blockstream.');
+                throw new RuntimeException(sprintf(
+                    'Blockstream request failed for %s with HTTP %d.',
+                    $path,
+                    $blocksResponse->status()
+                ));
             }
 
             $blocks = $blocksResponse->json();
 
-            if (! is_array($blocks) || $blocks === []) {
+            if (! is_array($blocks)) {
+                throw new RuntimeException('Blockstream blocks response is not a JSON array.');
+            }
+
+            if ($blocks === []) {
+                if ($nextStartHeight === null) {
+                    throw new RuntimeException('Blockstream returned an empty block list at the chain tip.');
+                }
+
                 break;
             }
 
             $page = array_slice($blocks, 0, 10);
 
             foreach ($page as $block) {
-                if (! is_array($block) || ! isset($block['id']) || ! is_string($block['id'])) {
+                if (! is_array($block)) {
+                    continue;
+                }
+
+                $blockHash = null;
+
+                if (isset($block['id']) && is_string($block['id']) && $block['id'] !== '') {
+                    $blockHash = $block['id'];
+                } elseif (isset($block['hash']) && is_string($block['hash']) && $block['hash'] !== '') {
+                    $blockHash = $block['hash'];
+                }
+
+                if ($blockHash === null) {
+                    continue;
+                }
+
+                if ($skipRemaining > 0) {
+                    $skipRemaining--;
+
                     continue;
                 }
 
                 $height = (int) ($block['height'] ?? 0);
-                $economics = $this->fetchBlockEconomics((string) $block['id'], $height);
+                $economics = $this->fetchBlockEconomics($blockHash, $height);
 
                 $mapped[] = [
-                    'hash' => (string) $block['id'],
+                    'hash' => $blockHash,
                     'weight' => (int) ($block['weight'] ?? 0),
                     'height' => $height,
                     'miner' => $economics['miner'],
                     'block_reward' => $economics['block_reward'],
                     'total_fees' => $economics['total_fees'],
                     'total_transactions' => (int) ($block['tx_count'] ?? 0),
-                    'transactions' => $this->fetchTransactionIdsPage((string) $block['id'], 0, self::TRANSACTION_PAGE_SIZE),
+                    'transactions' => $this->fetchTransactionIdsPage($blockHash, 0, self::TRANSACTION_PAGE_SIZE),
                     'timestamp' => (int) ($block['timestamp'] ?? 0),
                     'size' => (int) ($block['size'] ?? 0),
                     'difficulty' => (string) ($block['difficulty'] ?? '0'),
@@ -190,7 +218,18 @@ class BlockstreamApiClient
                 break;
             }
 
-            $heights = array_map(static fn (array $b): int => (int) ($b['height'] ?? 0), $page);
+            $heights = [];
+
+            foreach ($page as $b) {
+                if (is_array($b)) {
+                    $heights[] = (int) ($b['height'] ?? 0);
+                }
+            }
+
+            if ($heights === []) {
+                break;
+            }
+
             $minHeight = min($heights);
             $nextStartHeight = $minHeight - 1;
 
@@ -453,9 +492,9 @@ class BlockstreamApiClient
         return (int) config('services.blockstream.cache_ttl', 30);
     }
 
-    private function latestBlocksCacheKey(int $limit): string
+    private function latestBlocksCacheKey(int $limit, int $offset = 0): string
     {
-        return "btc:blockstream:v5:latest-blocks:limit:{$limit}";
+        return "btc:blockstream:v7:latest-blocks:limit:{$limit}:offset:{$offset}";
     }
 
     private function blockDetailsCacheKey(string $hash, int $transactionsStart, int $transactionsLimit): string

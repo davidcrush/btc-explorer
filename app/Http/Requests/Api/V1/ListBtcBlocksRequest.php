@@ -18,6 +18,7 @@ class ListBtcBlocksRequest extends FormRequest
     {
         return [
             'limit' => ['sometimes', 'integer', 'min:1', 'max:100'],
+            'offset' => ['sometimes', 'integer', 'min:0', 'max:2000'],
         ];
     }
 }

@@ -33,8 +33,10 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonPath('data.blocks.0.total_fees', 4687500000)
             ->assertJsonPath('data.blocks.0.total_transactions', 3001)
             ->assertJsonPath('data.blocks.0.transactions.0', 'txid-1')
+            ->assertJsonPath('data.has_more', true)
             ->assertJsonStructure([
                 'data' => [
+                    'has_more',
                     'blocks' => [
                         [
                             'hash',
@@ -65,7 +67,16 @@ class BtcBlocksApiTest extends TestCase
             ->assertJsonValidationErrors(['limit']);
     }
 
-    public function test_it_returns_empty_blocks_if_blockstream_is_unavailable(): void
+    public function test_it_validates_offset_query_parameter(): void
+    {
+        $response = $this->getJson('/api/v1/btc/blocks?offset=2001');
+
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['offset']);
+    }
+
+    public function test_it_returns_502_when_blockstream_blocks_request_fails(): void
     {
         Http::fake([
             'https://blockstream.info/api/blocks' => Http::response([], 500),
@@ -73,11 +84,42 @@ class BtcBlocksApiTest extends TestCase
 
         $response = $this->getJson('/api/v1/btc/blocks');
 
-        $response->assertExactJson([
-            'data' => [
-                'blocks' => [],
-            ],
-        ]);
+        $response
+            ->assertStatus(502)
+            ->assertJsonPath('data.blocks', [])
+            ->assertJsonPath('data.has_more', false)
+            ->assertJsonStructure(['message', 'data' => ['blocks', 'has_more']]);
+    }
+
+    public function test_it_returns_blocks_after_offset(): void
+    {
+        Http::fake(function (\Illuminate\Http\Client\Request $request) {
+            $url = $request->url();
+
+            if (str_ends_with(parse_url($url, PHP_URL_PATH) ?? '', '/blocks')) {
+                return Http::response($this->fakeBlocks(10), 200);
+            }
+
+            if (str_ends_with($url, '/blocks/899989')) {
+                return Http::response($this->fakeBlocksAtHeights(899_989, 10), 200);
+            }
+
+            if (str_contains($url, '/txs')) {
+                return Http::response($this->fakeTransactions(2), 200);
+            }
+
+            return Http::response('', 404);
+        });
+
+        $response = $this->getJson('/api/v1/btc/blocks?limit=10&offset=10');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(10, 'data.blocks')
+            ->assertJsonPath('data.has_more', true)
+            ->assertJsonPath('data.blocks.0.height', 899_989)
+            ->assertJsonPath('data.blocks.0.hash', 'block-hash-899989')
+            ->assertJsonPath('data.blocks.9.height', 899_980);
     }
 
     public function test_it_pages_upstream_blocks_when_limit_exceeds_ten(): void
@@ -109,6 +151,7 @@ class BtcBlocksApiTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonCount(25, 'data.blocks')
+            ->assertJsonPath('data.has_more', true)
             ->assertJsonPath('data.blocks.0.height', 900_010)
             ->assertJsonPath('data.blocks.9.height', 900_001)
             ->assertJsonPath('data.blocks.10.height', 900_000)

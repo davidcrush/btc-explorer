@@ -9,6 +9,7 @@ use App\Http\Resources\Api\V1\BtcBlockResource;
 use App\Services\BlockstreamApiClient;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class BtcBlockController extends Controller
@@ -20,16 +21,30 @@ class BtcBlockController extends Controller
     public function index(ListBtcBlocksRequest $request): JsonResponse
     {
         $limit = (int) $request->validated('limit', 10);
+        $offset = (int) $request->validated('offset', 0);
 
         try {
-            $blocks = BtcBlockResource::collection($this->blockstreamApiClient->latestBlocks($limit))->resolve();
-        } catch (RuntimeException) {
-            $blocks = [];
+            $blocks = BtcBlockResource::collection($this->blockstreamApiClient->latestBlocks($limit, $offset))->resolve();
+        } catch (RuntimeException $e) {
+            Log::warning('btc_blocks_index_failed', [
+                'message' => $e->getMessage(),
+                'limit' => $limit,
+                'offset' => $offset,
+            ]);
+
+            return response()->json([
+                'message' => $e->getMessage(),
+                'data' => [
+                    'blocks' => [],
+                    'has_more' => false,
+                ],
+            ], 502);
         }
 
         return response()->json([
             'data' => [
                 'blocks' => $blocks,
+                'has_more' => count($blocks) === $limit,
             ],
         ]);
     }

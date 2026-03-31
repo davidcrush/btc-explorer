@@ -43,6 +43,8 @@ function BlockCardSkeleton() {
 export default function Index() {
     const [blocks, setBlocks] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
     const [error, setError] = useState(null);
     const [relativeTimeTick, setRelativeTimeTick] = useState(0);
     const { formatAmount, blocksPerPage } = useUserPreferences();
@@ -60,17 +62,49 @@ export default function Index() {
         setError(null);
 
         try {
-            const response = await axios.get(
-                `/api/v1/btc/blocks?limit=${blocksPerPage}`
+            const response = await axios.get('/api/v1/btc/blocks', {
+                params: { limit: blocksPerPage, offset: 0 },
+            });
+            const data = response?.data?.data;
+            setBlocks(data?.blocks ?? []);
+            setHasMore(Boolean(data?.has_more));
+        } catch (err) {
+            setError(
+                err?.response?.data?.message ||
+                    'Unable to load blocks right now.'
             );
-            setBlocks(response?.data?.data?.blocks ?? []);
-        } catch {
-            setError('Unable to load blocks right now.');
             setBlocks([]);
+            setHasMore(false);
         } finally {
             setLoading(false);
         }
     }, [blocksPerPage]);
+
+    const loadMore = useCallback(async () => {
+        if (!hasMore || loadingMore) {
+            return;
+        }
+
+        setLoadingMore(true);
+
+        try {
+            const response = await axios.get('/api/v1/btc/blocks', {
+                params: { limit: blocksPerPage, offset: blocks.length },
+            });
+            const data = response?.data?.data;
+            const next = data?.blocks ?? [];
+            setBlocks((prev) => [...prev, ...next]);
+            setHasMore(Boolean(data?.has_more));
+        } catch (err) {
+            setError(
+                err?.response?.data?.message ||
+                    'Unable to load more blocks right now.'
+            );
+            setHasMore(false);
+        } finally {
+            setLoadingMore(false);
+        }
+    }, [blocks.length, blocksPerPage, hasMore, loadingMore]);
 
     useEffect(() => {
         fetchBlocks();
@@ -179,6 +213,21 @@ export default function Index() {
                                     </Stack>
                                 </Box>
                             ))}
+
+                            {blocks.length > 0 && hasMore && (
+                                <Box textAlign="center" pt={2}>
+                                    <Button
+                                        variant="ghost"
+                                        colorPalette="orange"
+                                        onClick={loadMore}
+                                        loading={loadingMore}
+                                        loadingText="Loading more…"
+                                    >
+                                        Load more ({blocksPerPage}{' '}
+                                        {blocksPerPage === 1 ? 'block' : 'blocks'})
+                                    </Button>
+                                </Box>
+                            )}
 
                             {blocks.length === 0 && (
                                 <Text color="gray.400">No blocks available.</Text>

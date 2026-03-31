@@ -139,7 +139,7 @@ Base path: **`/api/v1`**.
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET` | `/api/v1/btc/blocks` | Latest blocks. Query: `limit` (optional, default 10, max 100). Esplora returns 10 blocks per upstream request; the client pages until `limit` is satisfied. |
+| `GET` | `/api/v1/btc/blocks` | Latest blocks. Query: `limit` (optional, default 10, max 100), `offset` (optional, default 0, max 2000) — skip that many blocks from the tip before returning the next `limit` rows. Response includes `has_more` when the number of blocks returned equals `limit` (there may be more older blocks). Esplora returns 10 blocks per upstream request; the client pages and skips until `offset` + `limit` are satisfied. Returns **502** with a `message` and empty `data.blocks` when the upstream Esplora request fails (e.g. HTTP 429/5xx) or the response is unusable — previously this was incorrectly returned as **200** with an empty list. |
 | `GET` | `/api/v1/btc/blocks/{hash}` | Block detail. Query: `transactions_start`, `transactions_limit` (paged tx list). |
 
 ## Tests
