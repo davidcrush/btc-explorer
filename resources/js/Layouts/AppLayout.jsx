@@ -204,7 +204,7 @@ export default function AppLayout({ title, subtitle, children }) {
                                                 colorPalette="orange"
                                                 onClick={() => setAmountUnit('satoshi')}
                                             >
-                                                sat
+                                                Satoshi
                                             </Button>
                                         </HStack>
 

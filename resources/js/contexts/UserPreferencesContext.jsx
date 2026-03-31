@@ -51,7 +51,7 @@ export function UserPreferencesProvider({ children }) {
                 return `${new Intl.NumberFormat(undefined, {
                     minimumFractionDigits: 0,
                     maximumFractionDigits: 8,
-                }).format(sats / 100000000)} btc`;
+                }).format(sats / 100000000)} ₿`;
             }
 
             if (amountUnit === 'millibit') {
@@ -68,7 +68,7 @@ export function UserPreferencesProvider({ children }) {
                 }).format(sats / 100)} μBTC`;
             }
 
-            return `${new Intl.NumberFormat().format(sats)} sat`;
+            return `${new Intl.NumberFormat().format(sats)} Satoshi`;
         },
         [amountUnit]
     );
