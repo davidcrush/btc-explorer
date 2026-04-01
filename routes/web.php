@@ -17,6 +17,10 @@ Route::get('/blocks/{hash}', function (string $hash) {
     ]);
 });
 
+Route::get('/transactions', function () {
+    return Inertia::render('Transactions/Index');
+});
+
 Route::get('/transactions/{txid}', function (string $txid) {
     return Inertia::render('Transactions/Show', [
         'txid' => $txid,

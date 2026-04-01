@@ -80,6 +80,61 @@ class BtcTransactionApiTest extends TestCase
             ->assertJsonPath('message', 'Failed to load transaction details.');
     }
 
+    public function test_it_returns_up_to_ten_recent_confirmed_transaction_summaries(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/blocks' => Http::response([
+                [
+                    'id' => 'tip-block-hash',
+                    'height' => 900_000,
+                ],
+            ], 200),
+            'https://blockstream.info/api/block/tip-block-hash/txs' => Http::response(
+                $this->fakeBlockTxSummaries(12),
+                200
+            ),
+        ]);
+
+        $response = $this->getJson('/api/v1/btc/transactions/recent');
+
+        $response
+            ->assertOk()
+            ->assertJsonCount(10, 'data.transactions')
+            ->assertJsonPath('data.transactions.0.txid', sprintf('%064x', 1))
+            ->assertJsonPath('data.transactions.0.fee', 100)
+            ->assertJsonPath('data.transactions.9.txid', sprintf('%064x', 10));
+    }
+
+    public function test_it_returns_502_when_recent_blocks_request_fails(): void
+    {
+        Http::fake([
+            'https://blockstream.info/api/blocks' => Http::response('', 500),
+        ]);
+
+        $response = $this->getJson('/api/v1/btc/transactions/recent');
+
+        $response
+            ->assertStatus(502)
+            ->assertJsonPath('message', 'Failed to load recent transactions.');
+    }
+
+    /**
+     * @return list<array{txid: string, fee: int}>
+     */
+    private function fakeBlockTxSummaries(int $count): array
+    {
+        $list = [];
+
+        for ($i = 1; $i <= $count; $i++) {
+            $list[] = [
+                'txid' => sprintf('%064x', $i),
+                'fee' => $i * 100,
+            ];
+        }
+
+        return $list;
+    }
+
     /**
      * @return array<string, mixed>
      */

@@ -51,6 +51,9 @@ export default function Show({ txid }) {
                 <Stack gap={6}>
                     <Flex justify="space-between" align="center" wrap="wrap" gap={3}>
                         <HStack>
+                            <Button variant="outline" onClick={() => router.visit('/transactions')}>
+                                All transactions
+                            </Button>
                             <Button variant="outline" onClick={() => router.visit('/blocks')}>
                                 Back to blocks
                             </Button>

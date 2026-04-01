@@ -5,6 +5,7 @@ namespace App\Services;
 use App\DataTransferObjects\BtcBlockData;
 use App\DataTransferObjects\BtcBlockDetailData;
 use App\DataTransferObjects\BtcTransactionDetailData;
+use App\DataTransferObjects\BtcTransactionSummaryData;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use RuntimeException;
@@ -118,6 +119,35 @@ class BlockstreamApiClient
         }
 
         return $this->hydrateTransactionDetail($payload);
+    }
+
+    /**
+     * @return list<BtcTransactionSummaryData>
+     */
+    public function recentConfirmedTransactions(int $limit = 10): array
+    {
+        $safeLimit = max(1, min($limit, 10));
+        $store = Cache::store($this->cacheStore());
+        $key = $this->recentTransactionsCacheKey($safeLimit);
+
+        try {
+            $cached = $store->get($key);
+            if (is_array($cached)) {
+                return $this->hydrateRecentTransactions($cached);
+            }
+        } catch (Throwable) {
+            // Ignore cache read failures.
+        }
+
+        $payload = $this->fetchRecentConfirmedTransactionsPayload($safeLimit);
+
+        try {
+            $store->put($key, $payload, now()->addSeconds($this->cacheTtl()));
+        } catch (Throwable) {
+            // Ignore cache write failures.
+        }
+
+        return $this->hydrateRecentTransactions($payload);
     }
 
     private function hydrateTransactionDetail(mixed $payload): ?BtcTransactionDetailData
@@ -596,6 +626,11 @@ class BlockstreamApiClient
         return "btc:blockstream:v1:tx-detail:{$txid}";
     }
 
+    private function recentTransactionsCacheKey(int $limit): string
+    {
+        return "btc:blockstream:v1:recent-txs:{$limit}";
+    }
+
     /**
      * @param  array<string, mixed>  $payload
      */
@@ -806,6 +841,101 @@ class BlockstreamApiClient
         }
 
         return $this->buildTransactionDetailArray($tx);
+    }
+
+    /**
+     * @return list<array{txid: string, fee: int}>
+     */
+    private function fetchRecentConfirmedTransactionsPayload(int $limit): array
+    {
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get('/blocks');
+
+        if (! $response->successful()) {
+            throw new RuntimeException(sprintf(
+                'Blockstream blocks request failed with HTTP %d.',
+                $response->status()
+            ));
+        }
+
+        $blocks = $response->json();
+
+        if (! is_array($blocks)) {
+            throw new RuntimeException('Unexpected Blockstream blocks response format.');
+        }
+
+        $summaries = [];
+
+        foreach ($blocks as $block) {
+            if (count($summaries) >= $limit) {
+                break;
+            }
+
+            if (! is_array($block)) {
+                continue;
+            }
+
+            $hash = null;
+
+            if (isset($block['id']) && is_string($block['id']) && $block['id'] !== '') {
+                $hash = $block['id'];
+            } elseif (isset($block['hash']) && is_string($block['hash']) && $block['hash'] !== '') {
+                $hash = $block['hash'];
+            }
+
+            if ($hash === null) {
+                continue;
+            }
+
+            $txs = $this->fetchBlockTransactionsPageRaw($hash, 0);
+
+            foreach ($txs as $tx) {
+                if (count($summaries) >= $limit) {
+                    break 2;
+                }
+
+                if (! is_array($tx)) {
+                    continue;
+                }
+
+                $txid = $tx['txid'] ?? null;
+
+                if (! is_string($txid) || preg_match('/^[a-fA-F0-9]{64}$/', $txid) !== 1) {
+                    continue;
+                }
+
+                $summaries[] = [
+                    'txid' => strtolower($txid),
+                    'fee' => (int) ($tx['fee'] ?? 0),
+                ];
+            }
+        }
+
+        return $summaries;
+    }
+
+    /**
+     * @param  list<mixed>  $rows
+     * @return list<BtcTransactionSummaryData>
+     */
+    private function hydrateRecentTransactions(array $rows): array
+    {
+        $out = [];
+
+        foreach ($rows as $row) {
+            if (! is_array($row) || ! is_string($row['txid'] ?? null) || $row['txid'] === '') {
+                continue;
+            }
+
+            $out[] = new BtcTransactionSummaryData(
+                txid: (string) $row['txid'],
+                fee: (int) ($row['fee'] ?? 0),
+            );
+        }
+
+        return $out;
     }
 
     /**

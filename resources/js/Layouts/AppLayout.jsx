@@ -106,6 +106,14 @@ export default function AppLayout({ title, subtitle, children }) {
                                 >
                                     Blocks
                                 </Button>
+                                <Button
+                                    size="sm"
+                                    variant={url.startsWith('/transactions') ? 'solid' : 'ghost'}
+                                    colorPalette="orange"
+                                    onClick={() => router.visit('/transactions')}
+                                >
+                                    Transactions
+                                </Button>
                             </HStack>
                         </Flex>
 
