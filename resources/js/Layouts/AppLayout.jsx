@@ -10,7 +10,7 @@ import {
     IconButton,
     Text,
 } from '@chakra-ui/react';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
     BLOCKS_PER_PAGE_OPTIONS,
     useUserPreferences,
@@ -18,46 +18,26 @@ import {
 
 const GITHUB_REPO_URL = 'https://github.com/davidcrush/btc-explorer';
 
+const palette = {
+    bg: 'gray.950',
+    text: 'gray.100',
+    subtext: 'gray.400',
+    panel: 'gray.900',
+    panelBorder: 'gray.700',
+    headerOutline: {
+        borderColor: 'gray.500',
+        color: 'gray.50',
+        bg: 'whiteAlpha.200',
+        _hover: { bg: 'whiteAlpha.300' },
+        _expanded: { bg: 'whiteAlpha.300' },
+    },
+};
+
 export default function AppLayout({ title, subtitle, children }) {
     const { url } = usePage();
-    const [colorMode, setColorMode] = useState('dark');
     const [showProfile, setShowProfile] = useState(false);
     const { amountUnit, setAmountUnit, blocksPerPage, setBlocksPerPage } =
         useUserPreferences();
-
-    useEffect(() => {
-        const saved = window.localStorage.getItem('color-mode');
-
-        if (saved === 'light' || saved === 'dark') {
-            setColorMode(saved);
-        }
-    }, []);
-
-    useEffect(() => {
-        window.localStorage.setItem('color-mode', colorMode);
-    }, [colorMode]);
-
-    const isDark = colorMode === 'dark';
-
-    const palette = useMemo(
-        () => ({
-            bg: isDark ? 'gray.950' : 'gray.50',
-            text: isDark ? 'gray.100' : 'gray.900',
-            subtext: isDark ? 'gray.400' : 'gray.600',
-            panel: isDark ? 'gray.900' : 'white',
-            panelBorder: isDark ? 'gray.700' : 'gray.200',
-            headerOutline: isDark
-                ? {
-                      borderColor: 'gray.500',
-                      color: 'gray.50',
-                      bg: 'whiteAlpha.200',
-                      _hover: { bg: 'whiteAlpha.300' },
-                      _expanded: { bg: 'whiteAlpha.300' },
-                  }
-                : {},
-        }),
-        [isDark]
-    );
 
     return (
         <Box minH="100vh" bg={palette.bg} color={palette.text}>
@@ -72,7 +52,7 @@ export default function AppLayout({ title, subtitle, children }) {
                                 py={1}
                                 px={2}
                                 onClick={() => router.visit('/')}
-                                _hover={{ bg: isDark ? 'whiteAlpha.100' : 'blackAlpha.50' }}
+                                _hover={{ bg: 'whiteAlpha.100' }}
                             >
                                 <Text
                                     as="span"
@@ -144,34 +124,9 @@ export default function AppLayout({ title, subtitle, children }) {
                                     />
                                 </Icon>
                             </IconButton>
-                            <IconButton
-                                aria-label={isDark ? 'Switch to light mode' : 'Switch to dark mode'}
-                                size="sm"
-                                variant="outline"
-                                rounded="full"
-                                {...palette.headerOutline}
-                                onClick={() => setColorMode(isDark ? 'light' : 'dark')}
-                            >
-                                <Icon
-                                    asChild={false}
-                                    viewBox="0 0 24 24"
-                                    boxSize="1.15em"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                >
-                                    {isDark ? (
-                                        <path d="M12 3v2.25m6.364.386l-1.591 1.591M21 12h-2.25m-.386 6.364l-1.591-1.591M12 18.75V21m-4.773-4.227l-1.591 1.591M5.25 12H3m4.227-4.773L5.636 5.636M15.75 12a3.75 3.75 0 1 1-7.5 0 3.75 3.75 0 0 1 7.5 0z" />
-                                    ) : (
-                                        <path d="M21.752 15.002A9.718 9.718 0 0 1 18 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 0 0 3 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 0 0 9.002-5.998z" />
-                                    )}
-                                </Icon>
-                            </IconButton>
                             <Box position="relative">
                                 <IconButton
-                                    aria-label="Profile and preferences"
+                                    aria-label="Preferences"
                                     aria-expanded={showProfile}
                                     size="sm"
                                     variant="outline"
@@ -183,11 +138,14 @@ export default function AppLayout({ title, subtitle, children }) {
                                         asChild={false}
                                         viewBox="0 0 24 24"
                                         boxSize="1.15em"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={1.5}
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
                                     >
-                                        <path
-                                            fill="currentColor"
-                                            d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 4c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"
-                                        />
+                                        <path d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 0 1 1.37.49l1.296 2.247a1.125 1.125 0 0 1-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 0 1 0 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 0 1-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 0 1-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 0 1-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 0 1-1.369-.49l-1.297-2.247a1.125 1.125 0 0 1 .26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 0 1 0-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 0 1-.26-1.43l1.297-2.247a1.125 1.125 0 0 1 1.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.213-1.28Z" />
+                                        <path d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
                                     </Icon>
                                 </IconButton>
                                 {showProfile && (
