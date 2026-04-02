@@ -96,6 +96,14 @@ export default function AppLayout({ title, subtitle, children }) {
                                 >
                                     Transactions
                                 </Button>
+                                <Button
+                                    size="sm"
+                                    variant={url.startsWith('/mempool') ? 'solid' : 'ghost'}
+                                    colorPalette="orange"
+                                    onClick={() => router.visit('/mempool')}
+                                >
+                                    Mempool
+                                </Button>
                             </HStack>
                         </Flex>
 

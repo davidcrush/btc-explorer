@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\DataTransferObjects\BtcBlockData;
 use App\DataTransferObjects\BtcBlockDetailData;
+use App\DataTransferObjects\BtcMempoolStatsData;
 use App\DataTransferObjects\BtcTransactionDetailData;
 use App\DataTransferObjects\BtcTransactionSummaryData;
 use Illuminate\Support\Facades\Cache;
@@ -148,6 +149,59 @@ class BlockstreamApiClient
         }
 
         return $this->hydrateRecentTransactions($payload);
+    }
+
+    /**
+     * Esplora GET /mempool — backlog stats only (no per-tx payloads).
+     */
+    public function mempoolStats(): BtcMempoolStatsData
+    {
+        $store = Cache::store($this->cacheStore());
+        $key = $this->mempoolStatsCacheKey();
+
+        try {
+            $cached = $store->get($key);
+            if (is_array($cached) && array_key_exists('count', $cached)) {
+                return $this->hydrateMempoolStats($cached);
+            }
+        } catch (Throwable) {
+            // Ignore cache read failures.
+        }
+
+        $payload = $this->fetchMempoolStatsPayload();
+
+        try {
+            $store->put($key, $payload, now()->addSeconds($this->mempoolCacheTtl()));
+        } catch (Throwable) {
+            // Ignore cache write failures.
+        }
+
+        return $this->hydrateMempoolStats($payload);
+    }
+
+    /**
+     * Paginated mempool txids from Esplora GET /mempool/txids (no GET /tx/{txid} calls).
+     *
+     * @return array{transactions: list<array{txid: string}>, total_count: int, limit: int}
+     */
+    public function mempoolTransactions(int $offset = 0, int $limit = self::TRANSACTION_PAGE_SIZE): array
+    {
+        $safeOffset = max(0, min($offset, 500_000));
+        $safeLimit = $this->normalizeTransactionsLimit($limit);
+        $txids = $this->fetchMempoolTxidsList();
+        $totalCount = count($txids);
+        $pageTxids = array_slice($txids, $safeOffset, $safeLimit);
+        $transactions = [];
+
+        foreach ($pageTxids as $txid) {
+            $transactions[] = ['txid' => $txid];
+        }
+
+        return [
+            'transactions' => $transactions,
+            'total_count' => $totalCount,
+            'limit' => $safeLimit,
+        ];
     }
 
     private function hydrateTransactionDetail(mixed $payload): ?BtcTransactionDetailData
@@ -629,6 +683,142 @@ class BlockstreamApiClient
     private function recentTransactionsCacheKey(int $limit): string
     {
         return "btc:blockstream:v1:recent-txs:{$limit}";
+    }
+
+    private function mempoolStatsCacheKey(): string
+    {
+        return 'btc:blockstream:v1:mempool-stats';
+    }
+
+    private function mempoolTxidsCacheKey(): string
+    {
+        return 'btc:blockstream:v1:mempool-txids';
+    }
+
+    private function mempoolCacheTtl(): int
+    {
+        return $this->blockDetailHotTtl();
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function fetchMempoolStatsPayload(): array
+    {
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get('/mempool');
+
+        if (! $response->successful()) {
+            throw new RuntimeException(sprintf(
+                'Blockstream mempool stats request failed with HTTP %d.',
+                $response->status()
+            ));
+        }
+
+        $json = $response->json();
+
+        if (! is_array($json)) {
+            throw new RuntimeException('Unexpected Blockstream mempool stats format.');
+        }
+
+        return $this->normalizeMempoolStatsPayload($json);
+    }
+
+    /**
+     * @param  array<string, mixed>  $json
+     * @return array<string, mixed>
+     */
+    private function normalizeMempoolStatsPayload(array $json): array
+    {
+        $hist = [];
+
+        foreach ($json['fee_histogram'] ?? [] as $row) {
+            if (is_array($row) && isset($row[0], $row[1]) && is_numeric($row[0]) && is_numeric($row[1])) {
+                $hist[] = [(float) $row[0], (int) $row[1]];
+            }
+        }
+
+        return [
+            'count' => (int) ($json['count'] ?? 0),
+            'vsize' => (int) ($json['vsize'] ?? 0),
+            'total_fee' => (int) ($json['total_fee'] ?? 0),
+            'fee_histogram' => $hist,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     */
+    private function hydrateMempoolStats(array $payload): BtcMempoolStatsData
+    {
+        $hist = [];
+
+        foreach ($payload['fee_histogram'] ?? [] as $row) {
+            if (is_array($row) && isset($row[0], $row[1])) {
+                $hist[] = [(float) $row[0], (int) $row[1]];
+            }
+        }
+
+        return new BtcMempoolStatsData(
+            count: (int) ($payload['count'] ?? 0),
+            vsize: (int) ($payload['vsize'] ?? 0),
+            totalFee: (int) ($payload['total_fee'] ?? 0),
+            feeHistogram: $hist,
+        );
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function fetchMempoolTxidsList(): array
+    {
+        $store = Cache::store($this->cacheStore());
+        $key = $this->mempoolTxidsCacheKey();
+
+        try {
+            $cached = $store->get($key);
+            if (is_array($cached)) {
+                return $cached;
+            }
+        } catch (Throwable) {
+            // Ignore cache read failures.
+        }
+
+        $response = Http::baseUrl($this->baseUrl())
+            ->timeout($this->timeout())
+            ->acceptJson()
+            ->get('/mempool/txids');
+
+        if (! $response->successful()) {
+            throw new RuntimeException(sprintf(
+                'Blockstream mempool txids request failed with HTTP %d.',
+                $response->status()
+            ));
+        }
+
+        $json = $response->json();
+
+        if (! is_array($json)) {
+            throw new RuntimeException('Unexpected Blockstream mempool txids format.');
+        }
+
+        $txids = [];
+
+        foreach ($json as $id) {
+            if (is_string($id) && preg_match('/^[a-fA-F0-9]{64}$/', $id) === 1) {
+                $txids[] = strtolower($id);
+            }
+        }
+
+        try {
+            $store->put($key, $txids, now()->addSeconds($this->mempoolCacheTtl()));
+        } catch (Throwable) {
+            // Ignore cache write failures.
+        }
+
+        return $txids;
     }
 
     /**

@@ -26,3 +26,7 @@ Route::get('/transactions/{txid}', function (string $txid) {
         'txid' => $txid,
     ]);
 });
+
+Route::get('/mempool', function () {
+    return Inertia::render('Mempool/Index');
+});

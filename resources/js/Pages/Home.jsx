@@ -101,12 +101,50 @@ export default function Home() {
                         </Endpoint>
                     </Stack>
 
+                    <Stack gap={4}>
+                        <Text fontWeight="semibold" fontSize="lg">
+                            Mempool
+                        </Text>
+
+                        <Endpoint method="GET" path="/api/v1/btc/mempool/stats">
+                            Backlog summary from Esplora GET /mempool (count, vsize, total fees, fee histogram).
+                        </Endpoint>
+
+                        <Endpoint
+                            method="GET"
+                            path="/api/v1/btc/mempool/transactions"
+                            query="offset=0&limit=25"
+                        >
+                            Paginated transaction ids from Esplora GET /mempool/txids only (no per-tx GET /tx
+                            calls). Query:{' '}
+                            <Text as="span" fontFamily="mono" fontSize="sm">
+                                offset
+                            </Text>{' '}
+                            (0–500000),{' '}
+                            <Text as="span" fontFamily="mono" fontSize="sm">
+                                limit
+                            </Text>{' '}
+                            (1–25). Response:{' '}
+                            <Text as="span" fontFamily="mono" fontSize="sm">
+                                total_count
+                            </Text>
+                            ,{' '}
+                            <Text as="span" fontFamily="mono" fontSize="sm">
+                                has_more
+                            </Text>
+                            .
+                        </Endpoint>
+                    </Stack>
+
                     <HStack flexWrap="wrap" gap={3}>
                         <Button colorPalette="orange" onClick={() => router.visit('/blocks')}>
                             View latest blocks
                         </Button>
                         <Button colorPalette="orange" variant="outline" onClick={() => router.visit('/transactions')}>
                             View transactions
+                        </Button>
+                        <Button colorPalette="orange" variant="outline" onClick={() => router.visit('/mempool')}>
+                            View mempool
                         </Button>
                     </HStack>
                 </Stack>
